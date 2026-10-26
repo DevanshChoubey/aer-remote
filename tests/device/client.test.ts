@@ -1,0 +1,314 @@
+import { createFakeTransport, type FakeDispenserOptions } from '@/ble/testing/fakeDispenser';
+import type { BleTransport } from '@/ble/transport';
+import { DispenserClient, type ClientOptions } from '@/device/client';
+import { DeviceError } from '@/device/errors';
+import type { Schedule } from '@/protocol/schedule';
+import { charUuid } from '@/protocol/uuids';
+import { createMemoryStore } from '@/store/memoryStore';
+
+const ID = 'dev1';
+const TZ = 'Asia/Kolkata';
+const NOW = new Date('2026-10-26T10:00:00Z');
+const morning: Schedule = {
+  start: { h: 8, m: 0 },
+  end: { h: 9, m: 0 },
+  days: ['mon', 'wed'],
+  interval: 20,
+};
+
+interface Rig {
+  t: ReturnType<typeof createFakeTransport>;
+  store: ReturnType<typeof createMemoryStore>;
+  client: DispenserClient;
+  counts: { connects: number; disconnects: number };
+}
+
+const rig = (device: FakeDispenserOptions = {}, opts: ClientOptions = {}): Rig => {
+  const t = createFakeTransport({ [ID]: device });
+  const counts = { connects: 0, disconnects: 0 };
+  const wrapped: BleTransport = {
+    adapterState: () => t.adapterState(),
+    requestPermissions: () => t.requestPermissions(),
+    scan: (cb, ms) => t.scan(cb, ms),
+    async connect(id, ms) {
+      const c = await t.connect(id, ms);
+      counts.connects += 1;
+      return {
+        ...c,
+        characteristics: () => c.characteristics(),
+        write: (u, b) => c.write(u, b),
+        subscribe: (u, cb) => c.subscribe(u, cb),
+        onDisconnect: (cb) => c.onDisconnect(cb),
+        disconnect: () => {
+          counts.disconnects += 1;
+          return c.disconnect();
+        },
+      };
+    },
+  };
+  const store = createMemoryStore();
+  const client = new DispenserClient(wrapped, store, { now: () => NOW, idleMs: 200, ...opts });
+  return { t, store, client, counts };
+};
+
+const mts = (r: Rig): number[] => r.t.state(ID).writes.map((w) => w.mT);
+
+const codeOf = async (p: Promise<unknown>): Promise<string> => {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof DeviceError) return e.code;
+    throw e;
+  }
+  return 'resolved';
+};
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+describe('add and scan', () => {
+  it('saves the probed channels, status and clock flag', async () => {
+    jest.useFakeTimers();
+    const r = rig({ commandChar: charUuid('0002') });
+    const adding = r.client.add(ID, 'Hall', TZ);
+    await jest.advanceTimersByTimeAsync(10000);
+    const saved = await adding;
+    expect(saved.name).toBe('Hall');
+    expect(saved.channels?.command).toBe(charUuid('0002'));
+    expect(saved.clockSet).toBe(true);
+    expect(saved.lastStatus?.batteryMv).toBe(3000);
+    expect(saved.lastStatus?.at).toBe(NOW.toISOString());
+    expect(await r.store.get(ID)).toEqual(saved);
+  });
+
+  it('does not save anything when the device is busy', async () => {
+    jest.useFakeTimers();
+    const r = rig({ busy: true });
+    const p = codeOf(r.client.add(ID, 'Hall', TZ));
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(await p).toBe('unreachable');
+    expect(await r.store.list()).toEqual([]);
+  });
+
+  it('scans through the transport', async () => {
+    const r = rig();
+    const found: string[] = [];
+    await r.client.scan((d) => found.push(d.id), 1000).done;
+    expect(found).toEqual([ID]);
+  });
+});
+
+describe('operations', () => {
+  it('blinks the LED', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    await r.client.blink(ID);
+    expect(r.t.state(ID).ledBlinks).toBe(1);
+  });
+
+  it('sprayNow increments the counter and stores the new status', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    const status = await r.client.sprayNow(ID);
+    expect(status.spraysSinceRefill).toBe(1);
+    expect(r.t.state(ID).spraysSinceRefill).toBe(1);
+    expect((await r.store.get(ID))?.lastStatus?.spraysSinceRefill).toBe(1);
+  });
+
+  it('sprayNow rejects with batteryTooLow on a low battery but still stores the status', async () => {
+    const r = rig({ batteryMv: 2300 });
+    await r.client.add(ID, 'Hall', TZ);
+    let err: unknown;
+    try {
+      await r.client.sprayNow(ID);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(DeviceError);
+    expect(err).toMatchObject({ code: 'rejected', message: 'batteryTooLow' });
+    expect((await r.store.get(ID))?.lastStatus?.batteryMv).toBe(2300);
+  });
+
+  it('setAutoSpray sets an interval and null stops it', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    expect((await r.client.setAutoSpray(ID, 20)).autoSpray).toBe(20);
+    expect(r.t.state(ID).autoSpray).toBe(20);
+    expect((await r.client.setAutoSpray(ID, null)).autoSpray).toBeNull();
+    expect(r.t.state(ID).autoSpray).toBeNull();
+    expect(mts(r)).toContain(106);
+  });
+
+  it('resetRefill zeroes the counter', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    await r.client.sprayNow(ID);
+    const status = await r.client.resetRefill(ID);
+    expect(status.spraysSinceRefill).toBe(0);
+    expect((await r.store.get(ID))?.lastStatus?.spraysSinceRefill).toBe(0);
+  });
+
+  it('refresh returns and stores status and schedules', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    r.t.state(ID).schedules = [morning];
+    const out = await r.client.refresh(ID);
+    expect(out.schedules).toEqual([morning]);
+    expect(out.status.batteryMv).toBe(3000);
+    expect((await r.store.get(ID))?.schedules).toEqual({
+      list: [morning],
+      at: NOW.toISOString(),
+    });
+  });
+
+  it('rejects an unknown dispenser without connecting', async () => {
+    const r = rig();
+    expect(await codeOf(r.client.blink('nope'))).toBe('unreachable');
+    expect(r.counts.connects).toBe(0);
+  });
+});
+
+describe('saveSchedules', () => {
+  it('writes 108, waits the gap, writes 103, then 109, and returns the read-back', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { scheduleGapMs: 3000 });
+    const added = r.client.add(ID, 'Hall', TZ);
+    await jest.advanceTimersByTimeAsync(0);
+    await added;
+    const base = mts(r).length;
+    const p = r.client.saveSchedules(ID, [morning]);
+    await jest.advanceTimersByTimeAsync(2999);
+    expect(mts(r).slice(base)).toEqual([108]);
+    await jest.advanceTimersByTimeAsync(1);
+    const list = await p;
+    expect(
+      mts(r)
+        .slice(base)
+        .filter((m) => m !== 107),
+    ).toEqual([108, 103, 109]);
+    expect(list).toEqual([morning]);
+    expect((await r.store.get(ID))?.schedules?.list).toEqual([morning]);
+  });
+
+  it('with an empty list removes and skips the set', async () => {
+    const r = rig({}, { scheduleGapMs: 0 });
+    await r.client.add(ID, 'Hall', TZ);
+    r.t.state(ID).schedules = [morning];
+    expect(await r.client.saveSchedules(ID, [])).toEqual([]);
+    expect(mts(r)).not.toContain(103);
+    expect(r.t.state(ID).schedules).toEqual([]);
+  });
+
+  it('rejects an invalid list before any write or connect', async () => {
+    const r = rig();
+    const bad: Schedule = { ...morning, days: [] };
+    expect(await codeOf(r.client.saveSchedules(ID, [bad]))).toBe('rejected');
+    expect(r.counts.connects).toBe(0);
+    expect(mts(r)).toEqual([]);
+  });
+
+  it('on a mid-way drop retrieves what the device has, stores it and rethrows', async () => {
+    // Writes: 102 set-time, 107 status, 108 remove (drops here).
+    const r = rig({ disconnectAfter: 3 }, { scheduleGapMs: 0 });
+    r.t.state(ID).schedules = [morning];
+    // Seed the store so the client knows the device without using the dropped write count.
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    jest.useFakeTimers();
+    const p = codeOf(r.client.saveSchedules(ID, [morning]));
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(await p).toBe('disconnected');
+    expect((await r.store.get(ID))?.schedules?.list).toEqual([]);
+  });
+
+  it('keeps the session open through a long save', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 1000, scheduleGapMs: 3000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    const p = r.client.saveSchedules(ID, [morning]);
+    await jest.advanceTimersByTimeAsync(3500);
+    expect(await p).toEqual([morning]);
+    expect(r.counts.disconnects).toBe(0);
+    expect(r.counts.connects).toBe(1);
+  });
+});
+
+describe('session lifecycle', () => {
+  it('closes the session idleMs after the last operation', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 10000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await r.client.blink(ID);
+    await jest.advanceTimersByTimeAsync(9999);
+    expect(r.counts.disconnects).toBe(0);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(r.counts.disconnects).toBe(1);
+    await r.client.blink(ID);
+    expect(r.counts.connects).toBe(2);
+  });
+
+  it('restarts the idle timer after each operation', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 10000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await r.client.blink(ID);
+    await jest.advanceTimersByTimeAsync(8000);
+    await r.client.blink(ID);
+    await jest.advanceTimersByTimeAsync(8000);
+    expect(r.counts.disconnects).toBe(0);
+    expect(r.counts.connects).toBe(1);
+  });
+
+  it('shares one session between concurrent operations and runs them in order', async () => {
+    const r = rig();
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await Promise.all([r.client.blink(ID), r.client.sprayNow(ID), r.client.refresh(ID)]);
+    expect(r.counts.connects).toBe(1);
+    const ops = mts(r).filter((m) => m === 113 || m === 104 || m === 109);
+    expect(ops).toEqual([113, 104, 109]);
+  });
+
+  it('opens a new session after the device drops the link', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    r.t.disconnect(ID);
+    await r.client.blink(ID);
+    expect(r.counts.connects).toBe(2);
+    expect(r.t.state(ID).ledBlinks).toBe(1);
+  });
+
+  it('does not retry an operation that failed mid-way', async () => {
+    // Writes: 102, 107, 104 (spray applied, link drops, no reply).
+    const r = rig({ disconnectAfter: 3 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    expect(await codeOf(r.client.sprayNow(ID))).toBe('disconnected');
+    expect(r.t.state(ID).spraysSinceRefill).toBe(1);
+  });
+});
+
+describe('rename and remove', () => {
+  it('renames without connecting', async () => {
+    const r = rig();
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await r.client.rename(ID, 'Lounge');
+    expect((await r.store.get(ID))?.name).toBe('Lounge');
+    expect(r.counts.connects).toBe(0);
+  });
+
+  it('remove closes the open session and then deletes the record', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    await r.client.remove(ID);
+    expect(r.counts.disconnects).toBe(1);
+    expect(await r.store.get(ID)).toBeNull();
+  });
+
+  it('does not resurrect a removed dispenser with a late save', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    const op = r.client.sprayNow(ID);
+    await r.client.remove(ID);
+    await op;
+    expect(await r.store.get(ID)).toBeNull();
+  });
+});
