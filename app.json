@@ -18,7 +18,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "blockedPermissions": ["android.permission.ACCESS_FINE_LOCATION"]
+      "blockedPermissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -39,6 +45,15 @@
           "modes": [],
           "bluetoothAlwaysPermission": "Aer Remote uses Bluetooth to talk to your air freshener.",
           "neverForLocation": true
+        }
+      ],
+      "./plugins/withReleaseNoInternet",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 31
+          }
         }
       ]
     ],
