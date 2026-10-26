@@ -1,0 +1,118 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import { createFakeTransport, type FakeTransport } from '@/ble/testing/fakeDispenser';
+import { ServicesProvider, type Services } from '@/core';
+import { DispenserClient } from '@/device/client';
+import { SettingsScreen } from '@/screens/settings/SettingsScreen';
+import { filterZones, listTimeZones } from '@/screens/settings/zones';
+import { createMemoryStore } from '@/store/memoryStore';
+import { ThemeProvider } from '@/theme';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.0.0' } },
+}));
+
+const mockBack = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ back: mockBack, push: jest.fn(), replace: jest.fn() }),
+}));
+
+async function mount(
+  onPreferenceChange = jest.fn(),
+): Promise<{ fake: FakeTransport; services: Services }> {
+  const fake = createFakeTransport({ a: {} });
+  const store = createMemoryStore();
+  await store.upsert({ id: 'a', name: 'Kitchen', homeTimeZone: 'UTC' });
+  const services: Services = {
+    store,
+    client: new DispenserClient(fake, store, { scheduleGapMs: 0, connectAttempts: 1 }),
+  };
+  await render(
+    <ServicesProvider services={services}>
+      <ThemeProvider scheme="light" onPreferenceChange={onPreferenceChange}>
+        <SettingsScreen />
+      </ThemeProvider>
+    </ServicesProvider>,
+  );
+  return { fake, services };
+}
+
+describe('SettingsScreen', () => {
+  it('shows the unofficial notice, version, licence and compatibility', async () => {
+    await mount();
+    expect(await screen.findByText('Unofficial app. Not affiliated with Godrej.')).toBeTruthy();
+    expect(screen.getByText('Version 1.0.0')).toBeTruthy();
+    expect(screen.getByText('Open source under the MIT licence.')).toBeTruthy();
+    expect(screen.getByText('Works with Godrej aer Smart Matic')).toBeTruthy();
+  });
+
+  it('reports a theme choice', async () => {
+    const onChange = jest.fn();
+    await mount(onChange);
+    await fireEvent.press(await screen.findByLabelText('Dark'));
+    expect(onChange).toHaveBeenCalledWith('dark');
+  });
+
+  it('goes back', async () => {
+    await mount();
+    await fireEvent.press(await screen.findByLabelText('Back'));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  it('changes a dispenser zone; the next refresh sends tZ for that zone', async () => {
+    const { fake, services } = await mount();
+    await fireEvent.press(await screen.findByLabelText('Kitchen, time zone UTC'));
+    await fireEvent.changeText(screen.getByLabelText('Search time zones'), 'kolkata');
+    expect(screen.queryByLabelText('Europe/London')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Asia/Kolkata'));
+    await waitFor(async () =>
+      expect((await services.store.get('a'))?.homeTimeZone).toBe('Asia/Kolkata'),
+    );
+    expect(await screen.findByLabelText('Kitchen, time zone Asia/Kolkata')).toBeTruthy();
+    await act(async () => {
+      await services.client.refresh('a');
+    });
+    expect(fake.state('a').tz).toBe(-330);
+    await act(async () => {
+      await services.client.remove('a');
+    });
+  });
+
+  it('says so when no zone matches', async () => {
+    await mount();
+    await fireEvent.press(await screen.findByLabelText('Kitchen, time zone UTC'));
+    await fireEvent.changeText(screen.getByLabelText('Search time zones'), 'zzzzqq');
+    expect(screen.getByText('No matching time zone.')).toBeTruthy();
+  });
+});
+
+describe('zones', () => {
+  it('lists IANA zones including Asia/Kolkata', () => {
+    expect(listTimeZones()).toContain('Asia/Kolkata');
+  });
+
+  it('falls back to a short list without Intl.supportedValuesOf', () => {
+    const original = Intl.supportedValuesOf;
+    // @ts-expect-error simulating an engine without the function
+    Intl.supportedValuesOf = undefined;
+    try {
+      const zones = listTimeZones();
+      expect(zones).toEqual(expect.arrayContaining(['Asia/Kolkata', 'UTC', 'Europe/London']));
+      expect(zones.length).toBeLessThan(60);
+    } finally {
+      Intl.supportedValuesOf = original;
+    }
+  });
+
+  it('filters by case-insensitive substring', () => {
+    const zones = ['Asia/Kolkata', 'Europe/London', 'America/New_York'];
+    expect(filterZones(zones, 'KOL')).toEqual(['Asia/Kolkata']);
+    expect(filterZones(zones, 'new york')).toEqual(['America/New_York']);
+    expect(filterZones(zones, '  ')).toEqual(zones);
+  });
+});

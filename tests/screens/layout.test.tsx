@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { createFakeTransport } from '@/ble/testing/fakeDispenser';
 import { createServices, useServices } from '@/core';
+import { useThemePreference } from '@/theme';
 import { AppProviders } from '@/screens/AppProviders';
 import { createMemoryStore } from '@/store/memoryStore';
-import { Txt } from '@/ui';
+import { Button, Txt } from '@/ui';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -46,5 +47,28 @@ describe('AppProviders', () => {
     mockFontsLoaded = true;
     await rerender(tree());
     await waitFor(() => expect(mockHide).toHaveBeenCalledTimes(1));
+  });
+
+  it('holds its children until the saved theme preference loads, then uses it', async () => {
+    let resolve: (p: 'dark') => void = () => undefined;
+    const preferences = {
+      load: () => new Promise<'dark'>((r) => (resolve = r)),
+      save: jest.fn(() => Promise.resolve()),
+    };
+    function Pref(): React.JSX.Element {
+      const { preference, setPreference } = useThemePreference();
+      return <Button label={`pref ${preference}`} onPress={() => setPreference('light')} />;
+    }
+    await render(
+      <AppProviders services={services} preferences={preferences}>
+        <Pref />
+      </AppProviders>,
+    );
+    expect(screen.queryByLabelText(/^pref/)).toBeNull();
+    expect(mockHide).not.toHaveBeenCalled();
+    await act(async () => resolve('dark'));
+    expect(await screen.findByLabelText('pref dark')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('pref dark'));
+    expect(preferences.save).toHaveBeenCalledWith('light');
   });
 });

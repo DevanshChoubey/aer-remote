@@ -544,3 +544,34 @@ describe('blink before add', () => {
     expect(await r.store.list()).toEqual([]);
   });
 });
+
+describe('setHomeTimeZone', () => {
+  it('stores the zone without connecting', async () => {
+    const r = rig();
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: 'UTC' });
+    await r.client.setHomeTimeZone(ID, 'Europe/London');
+    expect((await r.store.get(ID))?.homeTimeZone).toBe('Europe/London');
+    expect(r.counts.connects).toBe(0);
+  });
+
+  it('rejects an invalid zone and leaves the record alone', async () => {
+    const r = rig();
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: 'UTC' });
+    await expect(r.client.setHomeTimeZone(ID, 'Not/AZone')).rejects.toMatchObject({
+      name: 'DeviceError',
+      code: 'rejected',
+    });
+    expect((await r.store.get(ID))?.homeTimeZone).toBe('UTC');
+  });
+
+  it('sends the new zone on the next connect, even after a session was open', async () => {
+    const r = rig();
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: 'UTC' });
+    await r.client.refresh(ID);
+    expect(r.t.state(ID).tz).toBe(0);
+    await r.client.setHomeTimeZone(ID, 'Asia/Kolkata');
+    await r.client.refresh(ID);
+    expect(r.t.state(ID).tz).toBe(-330);
+    await r.client.remove(ID);
+  });
+});

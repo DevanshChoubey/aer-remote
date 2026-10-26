@@ -19,3 +19,5 @@ export {
   type DeviceStatus,
 } from '@/protocol/status';
 export type { SavedDispenser } from '@/store/types';
+export { createThemePreferenceStore } from './preferences';
+export type { ThemePreferenceStore } from '@/store/themePreferenceStore';

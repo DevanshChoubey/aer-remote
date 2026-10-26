@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { t } from '@/i18n';
-import { Button, Column, EmptyState, Screen, Txt } from '@/ui';
+import { Button, Column, EmptyState, Row, Screen, Txt } from '@/ui';
 
 import { DispenserTile } from './DispenserTile';
 import { useDispensers } from './useDispensers';
@@ -29,6 +29,13 @@ export function HomeScreen(): ReactElement {
   );
   return (
     <Screen title={t('home.title')} scroll>
+      <Row justify="end">
+        <Button
+          variant="ghost"
+          label={t('home.settings')}
+          onPress={() => router.push('/settings')}
+        />
+      </Row>
       {failed ? (
         <Column gap={3}>
           <Txt color="warn">{t('home.loadFailed')}</Txt>

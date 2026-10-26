@@ -150,6 +150,12 @@ describe('HomeScreen', () => {
     expect(await screen.findByText('Pantry')).toBeTruthy();
   });
 
+  it('has a Settings link in the header', async () => {
+    await renderHome(rig());
+    await fireEvent.press(await screen.findByLabelText('Settings'));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+  });
+
   it('shows the Bluetooth test link in dev builds', async () => {
     await renderHome(rig());
     await fireEvent.press(await screen.findByLabelText('Bluetooth test'));

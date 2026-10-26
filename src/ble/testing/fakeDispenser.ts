@@ -45,6 +45,8 @@ export interface FakeDispenserState {
   autoSpray: Interval | null;
   spraysSinceRefill: number;
   time?: number;
+  /** The tZ (minutes west of UTC, standard time) of the last set-time message. */
+  tz?: number;
   ledBlinks: number;
   writes: { char: string; mT: number }[];
 }
@@ -94,6 +96,8 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
     case MT.setTime: {
       const eP = numberOf(body.eP);
       if (eP !== undefined) state.time = eP;
+      const tZ = numberOf(body.tZ);
+      if (tZ !== undefined) state.tz = tZ;
       return [];
     }
     case MT.setSchedules: {

@@ -178,6 +178,22 @@ export class DispenserClient {
     await this.patch(id, (d) => ({ ...d, name }));
   }
 
+  /**
+   * Changes the zone used the next time the clock is set. Closes any live session so the next
+   * connect sends the new zone. Rejects with `rejected` for a zone the phone does not know.
+   */
+  async setHomeTimeZone(id: string, zone: string): Promise<void> {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: zone });
+    } catch {
+      throw new DeviceError('rejected', 'invalid time zone');
+    }
+    await this.run(id, async () => {
+      await this.closeSession(id);
+      await this.patch(id, (d) => ({ ...d, homeTimeZone: zone }));
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.run(id, async () => {
       await this.closeSession(id);
