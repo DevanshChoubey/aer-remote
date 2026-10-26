@@ -9,7 +9,7 @@ import {
   stopAutoSprayMsg,
   testLedMsg,
 } from '@/protocol/messages';
-import { parseSchedules } from '@/protocol/replies';
+import { parseSchedules, ReplyParseError } from '@/protocol/replies';
 import { MAX_SCHEDULES, validateSchedule, type Interval, type Schedule } from '@/protocol/schedule';
 import { isBatteryTooLow, parseStatus, type DeviceStatus } from '@/protocol/status';
 import type { DispenserStore, SavedDispenser } from '@/store/types';
@@ -26,6 +26,11 @@ export interface ClientOptions extends SessionOptions {
 
 const DEFAULT_IDLE_MS = 10000;
 const DEFAULT_SCHEDULE_GAP_MS = 3000;
+
+const UNREADABLE_SCHEDULES = 'unreadable schedules reply';
+
+const isUnreadable = (e: unknown): boolean =>
+  e instanceof DeviceError && e.message === UNREADABLE_SCHEDULES;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -114,7 +119,19 @@ export class DispenserClient {
   refresh(id: string): Promise<{ status: DeviceStatus; schedules: Schedule[] }> {
     return this.withSession(id, async (s) => {
       const status = await this.fetchStatus(s);
-      const schedules = await this.retrieve(s);
+      let schedules: Schedule[];
+      try {
+        schedules = await this.retrieve(s);
+      } catch (e) {
+        if (isUnreadable(e)) {
+          // Unknown beats stale: keep the new status, forget the list the device no longer matches.
+          await this.patch(id, ({ schedules: _gone, ...rest }) => ({
+            ...rest,
+            lastStatus: { ...status, at: this.stamp() },
+          }));
+        }
+        throw e;
+      }
       await this.patch(id, (d) => ({
         ...d,
         lastStatus: { ...status, at: this.stamp() },
@@ -378,7 +395,13 @@ export class DispenserClient {
   }
 
   private async retrieve(s: DispenserSession): Promise<Schedule[]> {
-    return parseSchedules(await s.send(retrieveSchedulesMsg(s.nextMN())));
+    const reply = await s.send(retrieveSchedulesMsg(s.nextMN()));
+    try {
+      return parseSchedules(reply);
+    } catch (e) {
+      if (e instanceof ReplyParseError) throw new DeviceError('noReply', UNREADABLE_SCHEDULES);
+      throw e;
+    }
   }
 
   /** Fetch status after a change and store it. */

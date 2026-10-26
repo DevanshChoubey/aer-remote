@@ -56,6 +56,8 @@ export interface FakeDispenserState {
   /** The tZ (minutes west of UTC, standard time) of the last set-time message. */
   tz?: number;
   ledBlinks: number;
+  /** Retrieve-schedules replies carry an entry that cannot be decoded. */
+  badScheduleReply?: boolean;
   writes: { char: string; mT: number }[];
 }
 
@@ -145,6 +147,7 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
       state.schedules = [];
       return [];
     case MT.retrieveSchedules:
+      if (state.badScheduleReply) return [['S', [{ s: new Uint8Array([1, 2, 3]) }]]];
       return [['S', state.schedules.map((s) => ({ s: encodeScheduleEntry(s) }))]];
     case MT.testLed:
       state.ledBlinks += 1;

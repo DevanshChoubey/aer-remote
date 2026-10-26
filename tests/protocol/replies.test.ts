@@ -1,4 +1,4 @@
-import { parseSchedules, toReply } from '@/protocol/replies';
+import { parseSchedules, ReplyParseError, toReply } from '@/protocol/replies';
 import { DEFAULT_CHANNELS, SERVICE_UUID, charUuid } from '@/protocol/uuids';
 
 describe('replies', () => {
@@ -26,15 +26,24 @@ describe('replies', () => {
     expect(none && parseSchedules(none)).toEqual([]);
   });
 
-  it('skips malformed schedule entries', () => {
-    const r = toReply({
-      mT: 159,
-      mN: 1,
-      S: [{ s: [1, 2, 3] }, { s: [0x7c, 8, 0, 42, 20] }, { s: [0x7c, 8, 0, 42, 15] }],
-    });
-    const list = r ? parseSchedules(r) : [];
-    expect(list).toHaveLength(1);
-    expect(list[0]?.interval).toBe(20);
+  it('reads an empty or missing schedule list as no schedules', () => {
+    const empty = toReply({ mT: 159, mN: 1, S: [] });
+    expect(empty && parseSchedules(empty)).toEqual([]);
+  });
+
+  it.each([
+    ['a too-short entry', [{ s: [1, 2, 3] }, { s: [0x7c, 8, 0, 42, 20] }]],
+    ['an unknown interval', [{ s: [0x7c, 8, 0, 42, 20] }, { s: [0x7c, 8, 0, 42, 15] }]],
+    ['an entry without bytes', [{ s: 'x' }]],
+    ['an entry that is not a map', [7]],
+  ])('throws a ReplyParseError on %s, never dropping it silently', (_what, S) => {
+    const r = toReply({ mT: 159, mN: 1, S });
+    expect(() => r && parseSchedules(r)).toThrow(ReplyParseError);
+  });
+
+  it('throws a ReplyParseError when S is not an array', () => {
+    const r = toReply({ mT: 159, mN: 1, S: { s: [0x7c, 8, 0, 42, 20] } });
+    expect(() => r && parseSchedules(r)).toThrow(ReplyParseError);
   });
 
   it('exposes uuids', () => {

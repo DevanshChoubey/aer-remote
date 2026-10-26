@@ -228,6 +228,20 @@ describe('operations', () => {
     });
   });
 
+  it('refresh rejects an undecodable schedule list and forgets the cached one', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    r.t.state(ID).schedules = [morning];
+    await r.client.refresh(ID);
+    expect((await r.store.get(ID))?.schedules?.list).toEqual([morning]);
+    r.t.state(ID).badScheduleReply = true;
+    expect(await codeOf(r.client.refresh(ID))).toBe('noReply');
+    const saved = await r.store.get(ID);
+    expect(saved?.schedules).toBeUndefined();
+    expect(saved?.lastStatus?.batteryMv).toBe(3000);
+    await r.client.remove(ID);
+  });
+
   it('rejects an unknown dispenser without connecting', async () => {
     const r = rig();
     expect(await codeOf(r.client.blink('nope'))).toBe('unreachable');

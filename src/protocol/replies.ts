@@ -25,18 +25,29 @@ function toBytes(v: CborValue | undefined): Uint8Array | null {
   return null;
 }
 
+/** A reply the device sent in a shape this app does not understand. */
+export class ReplyParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReplyParseError';
+  }
+}
+
+/**
+ * The schedules in a retrieve reply. A missing or empty `S` means none (a dispenser with no
+ * schedules may omit it). Anything undecodable throws, so a list is never silently shortened.
+ */
 export function parseSchedules(r: Reply): Schedule[] {
   const list = r.body.S;
-  if (!Array.isArray(list)) return [];
-  const out: Schedule[] = [];
-  for (const item of list) {
+  if (list === undefined) return [];
+  if (!Array.isArray(list)) throw new ReplyParseError('schedule list is not an array');
+  return list.map((item, i) => {
     const bytes = isMap(item) ? toBytes(item.s) : null;
-    if (!bytes) continue;
+    if (!bytes) throw new ReplyParseError(`schedule ${i} has no entry bytes`);
     try {
-      out.push(decodeScheduleEntry(bytes));
-    } catch {
-      // Skip entries the device sent in a shape we do not understand.
+      return decodeScheduleEntry(bytes);
+    } catch (e) {
+      throw new ReplyParseError(`schedule ${i}: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }
-  return out;
+  });
 }
