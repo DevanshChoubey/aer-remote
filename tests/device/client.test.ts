@@ -75,6 +75,35 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+describe('scan permissions', () => {
+  it('rejects done with permissionDenied and never scans when denied', async () => {
+    const t = createFakeTransport({ [ID]: {} }, { permissionsGranted: false });
+    const scan = jest.spyOn(t, 'scan');
+    const client = new DispenserClient(t, createMemoryStore());
+    const found: string[] = [];
+    const handle = client.scan((d) => found.push(d.id), 1000);
+    await expect(handle.done).rejects.toMatchObject({ code: 'permissionDenied' });
+    expect(scan).not.toHaveBeenCalled();
+    expect(found).toEqual([]);
+  });
+
+  it('scans when granted', async () => {
+    const t = createFakeTransport({ [ID]: {} });
+    const client = new DispenserClient(t, createMemoryStore());
+    const found: string[] = [];
+    await client.scan((d) => found.push(d.id), 1000).done;
+    expect(found).toEqual([ID]);
+  });
+
+  it('openSession through the client rejects when denied', async () => {
+    const t = createFakeTransport({ [ID]: {} }, { permissionsGranted: false });
+    const connect = jest.spyOn(t, 'connect');
+    const client = new DispenserClient(t, createMemoryStore());
+    await expect(client.add(ID, 'Hall', TZ)).rejects.toMatchObject({ code: 'permissionDenied' });
+    expect(connect).not.toHaveBeenCalled();
+  });
+});
+
 describe('add and scan', () => {
   it('saves the probed channels, status and clock flag', async () => {
     jest.useFakeTimers();

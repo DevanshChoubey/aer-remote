@@ -113,6 +113,34 @@ describe('openSession', () => {
     }
   });
 
+  it('asks for permissions before the adapter check and proceeds when granted', async () => {
+    const t = setup();
+    const order: string[] = [];
+    const wrapped: BleTransport = {
+      ...t,
+      requestPermissions: async () => {
+        order.push('permissions');
+        return true;
+      },
+      adapterState: async () => {
+        order.push('adapter');
+        return 'on';
+      },
+      connect: (id, ms) => t.connect(id, ms),
+    };
+    await openSession(wrapped, ID, 'UTC', undefined, base);
+    expect(order).toEqual(['permissions', 'adapter']);
+  });
+
+  it('maps denied permissions to permissionDenied without connecting', async () => {
+    const t = { ...setup(), requestPermissions: async () => false } as BleTransport;
+    const connect = jest.spyOn(t, 'connect');
+    const adapter = jest.spyOn(t, 'adapterState');
+    expect(await codeOf(openSession(t, ID, 'UTC', undefined, base))).toBe('permissionDenied');
+    expect(connect).not.toHaveBeenCalled();
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['off', 'bluetoothOff'],
     ['unsupported', 'bluetoothOff'],

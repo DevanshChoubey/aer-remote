@@ -231,6 +231,8 @@ export class DispenserSession {
 }
 
 async function checkAdapter(t: BleTransport): Promise<void> {
+  // adapterState() never prompts, so ask here; the OS skips the dialog once granted.
+  if (!(await t.requestPermissions())) throw new DeviceError('permissionDenied');
   const state = await t.adapterState();
   if (state === 'off' || state === 'unsupported') throw new DeviceError('bluetoothOff');
   if (state === 'unauthorized') throw new DeviceError('permissionDenied');

@@ -274,7 +274,10 @@ function createConnection(id: string, device: Device): BleConnection {
   };
 }
 
-export function createFakeTransport(devices: Record<string, FakeDispenserOptions>): FakeTransport {
+export function createFakeTransport(
+  devices: Record<string, FakeDispenserOptions>,
+  transportOptions: { permissionsGranted?: boolean } = {},
+): FakeTransport {
   const registry = new Map<string, Device>();
   for (const [id, options] of Object.entries(devices)) {
     registry.set(id, {
@@ -295,7 +298,7 @@ export function createFakeTransport(devices: Record<string, FakeDispenserOptions
       return 'on';
     },
     async requestPermissions() {
-      return true;
+      return transportOptions.permissionsGranted ?? true;
     },
     scan(onFound, timeoutMs) {
       void timeoutMs;

@@ -54,11 +54,26 @@ export class DispenserClient {
     this.now = opts.now ?? ((): Date => new Date());
   }
 
+  /** Asks for permissions first; when denied, `done` rejects with permissionDenied and no scan starts. */
   scan(
     onFound: (d: FoundDevice) => void,
     timeoutMs: number,
   ): { stop(): void; done: Promise<void> } {
-    return this.transport.scan(onFound, timeoutMs);
+    let inner: { stop(): void; done: Promise<void> } | null = null;
+    let stopped = false;
+    const done = this.transport.requestPermissions().then(async (granted) => {
+      if (!granted) throw new DeviceError('permissionDenied');
+      if (stopped) return;
+      inner = this.transport.scan(onFound, timeoutMs);
+      await inner.done;
+    });
+    return {
+      stop: (): void => {
+        stopped = true;
+        inner?.stop();
+      },
+      done,
+    };
   }
 
   async add(id: string, name: string, homeTimeZone: string): Promise<SavedDispenser> {
