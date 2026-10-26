@@ -4,3 +4,12 @@ node_modules/
 *.xapk
 /decompiled/
 .superpowers/
+dist/
+web-build/
+expo-env.d.ts
+coverage/
+*.tsbuildinfo
+.env*.local
+/ios
+/android
+.DS_Store
