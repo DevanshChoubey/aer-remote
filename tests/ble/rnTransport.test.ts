@@ -143,3 +143,26 @@ describe('createRnTransport scan errors', () => {
     });
   });
 });
+
+describe('createRnTransport connect failure', () => {
+  it('does not hang on a stuck cancel after a failed connect', async () => {
+    jest.useFakeTimers();
+    try {
+      const manager = {
+        connectToDevice: () => Promise.reject(new Error('GATT 133')),
+        cancelDeviceConnection: () => new Promise(() => undefined),
+      } as unknown as BleManager;
+      const result = createRnTransport(() => manager)
+        .connect('d', 8000)
+        .then(
+          () => 'connected',
+          (e: Error) => e.message,
+        );
+      await jest.advanceTimersByTimeAsync(3000);
+      await expect(result).resolves.toBe('GATT 133');
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});

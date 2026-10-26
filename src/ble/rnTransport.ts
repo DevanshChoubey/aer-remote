@@ -98,6 +98,19 @@ export async function settledState(manager: BleManager, timeoutMs: number): Prom
   });
 }
 
+/** Cancels a connection, never hanging: the link is released best-effort if the stack is slow. */
+async function cancelBounded(manager: BleManager, deviceId: string): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, DISCONNECT_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([manager.cancelDeviceConnection(deviceId).then(() => undefined), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function wrapDevice(manager: BleManager, device: Device): BleConnection {
   const id = device.id;
   return {
@@ -160,17 +173,8 @@ export function wrapDevice(manager: BleManager, device: Device): BleConnection {
       const sub = manager.onDeviceDisconnected(id, () => cb());
       return () => sub.remove();
     },
-    async disconnect(): Promise<void> {
-      // Never hang: the link is released best-effort if the stack does not answer in time.
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, DISCONNECT_TIMEOUT_MS);
-      });
-      try {
-        await Promise.race([manager.cancelDeviceConnection(id).then(() => undefined), timeout]);
-      } finally {
-        clearTimeout(timer);
-      }
+    disconnect(): Promise<void> {
+      return cancelBounded(manager, id);
     },
   };
 }
@@ -273,7 +277,7 @@ export function createRnTransport(
         const device = await Promise.race([sequence, timeout]);
         return wrapDevice(m, device);
       } catch (e) {
-        await m.cancelDeviceConnection(deviceId).catch(() => undefined);
+        await cancelBounded(m, deviceId).catch(() => undefined);
         throw toError(e);
       } finally {
         clearTimeout(timer);
