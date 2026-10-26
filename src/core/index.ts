@@ -3,6 +3,7 @@ export { ServicesProvider, useServices, type Services } from './services';
 export { DeviceError, type DeviceErrorCode } from '@/device/errors';
 export {
   MAX_SCHEDULES,
+  nextSprayToday,
   sprayCount,
   validateSchedule,
   type Interval,

@@ -66,7 +66,7 @@ describe('i18n', () => {
   it('has plain-words copy for every device error code', () => {
     for (const code of DEVICE_ERROR_CODES) expect(t(`errors.${code}`).length).toBeGreaterThan(10);
     expect(DEVICE_ERROR_CODES).toContain('batteryTooLow');
-    expect(t('errors.unreachable')).toMatch(/another phone or the Godrej app/i);
+    expect(t('errors.unreachable')).toMatch(/close the Godrej app or any other phone/i);
   });
 
   it('carries the unofficial notice', () => {

@@ -3,11 +3,11 @@ export default {
   permissionDenied:
     'This app needs permission to find nearby devices. Allow it in your phone settings, then try again.',
   unreachable:
-    'Could not reach the dispenser. Make sure it is switched on and close to you. Another phone or the Godrej app may be connected to it. Close that, then try again.',
+    "Can't reach the dispenser. Move closer, or close the Godrej app or any other phone that's connected to it.",
   noReply: 'The dispenser did not answer. Move closer and try again.',
   rejected:
     'The dispenser refused that request. It may be busy or have its own limits. Wait a moment, then try again.',
-  batteryTooLow: 'The dispenser battery is too low to do that. Replace the batteries first.',
+  batteryTooLow: 'Battery too low to spray. Replace the batteries.',
   disconnected: 'The connection to the dispenser was lost. Try again.',
-  unknown: 'Something went wrong. Please try again.',
+  generic: 'Something went wrong. Please try again.',
 } as const;

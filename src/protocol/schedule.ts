@@ -65,3 +65,48 @@ export function decodeScheduleEntry(b: Uint8Array): Schedule {
     interval,
   };
 }
+
+const WEEKDAY_BY_SHORT: Record<string, Weekday> = {
+  Mon: 'mon',
+  Tue: 'tue',
+  Wed: 'wed',
+  Thu: 'thu',
+  Fri: 'fri',
+  Sat: 'sat',
+  Sun: 'sun',
+};
+
+/**
+ * The next spray at or after `now` (to the minute) on today's date in `timeZone`, or null when
+ * none is left. Sprays run at start, start + interval, ... for `sprayCount` sprays.
+ */
+export function nextSprayToday(
+  schedules: Schedule[],
+  now: Date,
+  timeZone: string,
+): TimeOfDay | null {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    hourCycle: 'h23',
+    hour: 'numeric',
+    minute: 'numeric',
+  }).formatToParts(now);
+  const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  const today = WEEKDAY_BY_SHORT[part('weekday')];
+  if (!today) return null;
+  const nowMin = Number(part('hour')) * 60 + Number(part('minute'));
+  let best: number | null = null;
+  for (const s of schedules) {
+    if (!s.days.includes(today) || validateSchedule(s).length > 0) continue;
+    const count = sprayCount(s);
+    for (let k = 0; k < count; k += 1) {
+      const at = minutes(s.start) + k * s.interval;
+      if (at >= nowMin) {
+        if (best === null || at < best) best = at;
+        break;
+      }
+    }
+  }
+  return best === null ? null : { h: Math.floor(best / 60), m: best % 60 };
+}
