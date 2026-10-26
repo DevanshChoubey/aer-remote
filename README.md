@@ -7,14 +7,16 @@ Unofficial app. Not affiliated with Godrej.
 
 ## Privacy
 
-The app works fully offline. It has no network calls, no account, no analytics and never asks for
-your location. It talks to your dispenser over Bluetooth only, and what it saves (dispenser names,
-time zones, the last status) stays on your phone.
+The app works fully offline. It has no network calls, no account and no analytics. Release builds
+hold no network permission at all. It never asks for your location, and the location permission is
+blocked. It talks to your dispenser over Bluetooth only, and what it saves (dispenser names, time
+zones, the last status) stays on your phone.
 
 ## Build for Android (Linux)
 
 Bluetooth needs a real phone: emulators have none. You need Bun, the JDK (17), the Android SDK with
-`ANDROID_HOME` set, and an Android 12 or newer phone with USB debugging on, plugged in.
+`ANDROID_HOME` set, and an Android 12 or newer phone with USB debugging on, plugged in. Android 12
+is the minimum (minSdk 31): older versions will not install the app.
 
 ```sh
 bun install

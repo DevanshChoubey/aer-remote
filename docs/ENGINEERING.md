@@ -41,7 +41,7 @@ importing `src/protocol`, `src/device`, `src/store` or `src/ble` directly. `src/
 - `Row` and `Column`
 - `Txt` with `variant` and `color` token names
 - `Touchable` (always has `accessibilityRole`, min 48dp hit area)
-- `Input`, `Img` and `Spacer`
+- `Input` and `Spacer` (an `Img` primitive is not built yet)
 
 Enforced by ESLint `no-restricted-imports` of those names from `react-native` outside
 `src/ui/primitives/`, plus `tests/theme-centralized.test.ts`.
@@ -66,8 +66,8 @@ non-null `!` outside tests. Exported functions have explicit return types.
 ## Code style
 
 Prettier (`printWidth: 100`, single quotes) and ESLint (`eslint-config-expo` plus the rules above,
-`no-console` except `console.warn/error`, `import/no-cycle`, `import/order`). Files are kebab-case for
-modules and PascalCase for components. One component per file. Named exports, except expo-router route
+`no-console` except `console.warn/error`, `import/no-cycle`, `import/order`). Files in `src/` are camelCase
+for modules (`fakeDispenser.ts`, `useScheduleDraft.ts`) and PascalCase for components. One component per file. Named exports, except expo-router route
 files, which need default exports.
 
 ## Errors
@@ -77,8 +77,9 @@ Domain code throws typed errors (`DeviceError` and the like). Screens map them t
 
 ## Privacy
 
-No network calls anywhere. ESLint `no-restricted-globals: fetch` applies to every file, release builds
-block the `INTERNET` permission, and location is never requested. No telemetry or analytics. Never log
+No network calls anywhere. ESLint `no-restricted-globals: fetch` applies to every file. Release builds
+remove the `INTERNET` permission through `plugins/withReleaseNoInternet.js` (debug builds keep it for
+Metro), and location is never requested and is blocked in `app.json`. No telemetry or analytics. Never log
 device identifiers beyond what a debug screen shows the user.
 
 ## Accessibility
