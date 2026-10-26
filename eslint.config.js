@@ -8,7 +8,7 @@ const rnVisualRestriction = {
       name: 'react-native',
       importNames: RN_VISUAL,
       message:
-        'Compose from the primitives in @/ui/primitives (Box, Row, Column, Txt, Touchable, Input, Img, Spacer) instead.',
+        'Compose from the primitives in @/ui/primitives (Box, Row, Column, Txt, Touchable, Input, Spacer) instead.',
     },
   ],
 };

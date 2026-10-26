@@ -8,7 +8,6 @@ export interface InputProps {
   placeholder?: string;
   onSubmitEditing?: () => void;
   accessibilityLabel: string;
-  secure?: boolean;
 }
 
 export function Input(props: InputProps): ReactElement {
@@ -21,7 +20,6 @@ export function Input(props: InputProps): ReactElement {
       placeholderTextColor={theme.color.muted}
       onSubmitEditing={props.onSubmitEditing}
       accessibilityLabel={props.accessibilityLabel}
-      secureTextEntry={props.secure}
       style={{
         minHeight: theme.touch.min,
         paddingHorizontal: theme.space(4),
