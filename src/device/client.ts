@@ -65,6 +65,8 @@ export class DispenserClient {
     await this.run(id, async () => {
       const existing = await this.store.get(id);
       await this.session(id, { ...existing, id, name, homeTimeZone });
+      // A reused session skips the open-time save, so write the identity here.
+      await this.patch(id, (d) => ({ ...d, name, homeTimeZone }));
     });
     const saved = await this.store.get(id);
     if (!saved) throw new DeviceError('unreachable', 'dispenser was removed');
@@ -129,7 +131,11 @@ export class DispenserClient {
         }
         const readBack = await this.retrieve(s);
         await this.patch(id, (d) => ({ ...d, schedules: { list: readBack, at: this.stamp() } }));
-        await this.finish(id, s);
+        try {
+          await this.finish(id, s);
+        } catch {
+          // The read-back is already stored; a failed status refresh keeps the old status.
+        }
         return readBack;
       } catch (e) {
         await this.recordDeviceSchedules(id);
@@ -147,6 +153,8 @@ export class DispenserClient {
       await this.closeSession(id);
       await this.patch(id, () => null);
     });
+    const st = this.devices.get(id);
+    if (st && st.inflight === 0) this.devices.delete(id);
   }
 
   private state(id: string): DeviceState {
@@ -186,7 +194,9 @@ export class DispenserClient {
   private armIdle(id: string, st: DeviceState): void {
     st.timer = setTimeout(() => {
       st.timer = null;
-      if (st.inflight === 0) void this.closeSession(id);
+      if (st.inflight !== 0) return;
+      // Queue the close behind the device's operations so a new connect cannot overlap it.
+      st.tail = st.tail.then(() => this.closeSession(id)).catch(() => undefined);
     }, this.idleMs);
   }
 
@@ -213,29 +223,30 @@ export class DispenserClient {
     session.onDisconnect(() => {
       if (st.session === session) st.session = null;
     });
-    await this.upsertOpened(known, opened.channels, opened.clockSet, opened.status);
+    await this.upsertOpened(
+      known,
+      base !== undefined,
+      opened.channels,
+      opened.clockSet,
+      opened.status,
+    );
     return session;
   }
 
   private async upsertOpened(
     known: SavedDispenser,
+    create: boolean,
     channels: SavedDispenser['channels'],
     clockSet: boolean,
     status: DeviceStatus,
   ): Promise<void> {
-    const next: SavedDispenser = {
-      ...known,
-      channels,
-      clockSet,
-      lastStatus: { ...status, at: this.stamp() },
-    };
+    const learned = { channels, clockSet, lastStatus: { ...status, at: this.stamp() } };
     const st = this.state(known.id);
     const run = st.storeTail.then(async () => {
+      // Merge onto the record as it is now, so a rename made while opening survives.
       const current = await this.store.get(known.id);
-      // A record the user already has keeps its own name; a new one is created from `known`.
-      await this.store.upsert(
-        current ? { ...next, name: known.name, schedules: current.schedules } : next,
-      );
+      if (current) await this.store.upsert({ ...current, ...learned });
+      else if (create) await this.store.upsert({ ...known, ...learned });
     });
     st.storeTail = run.catch(() => undefined);
     await run;
@@ -291,7 +302,8 @@ export class DispenserClient {
       const list = await this.retrieve(s);
       await this.patch(id, (d) => ({ ...d, schedules: { list, at: this.stamp() } }));
     } catch {
-      // The original error is the one the caller needs; the device may be unreachable now.
+      // The original error is the one the caller needs. Unknown beats stale: forget the list.
+      await this.patch(id, ({ schedules: _gone, ...rest }) => rest).catch(() => undefined);
     }
   }
 }

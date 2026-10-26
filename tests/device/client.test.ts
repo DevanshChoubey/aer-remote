@@ -21,11 +21,14 @@ interface Rig {
   store: ReturnType<typeof createMemoryStore>;
   client: DispenserClient;
   counts: { connects: number; disconnects: number };
+  gate: { disconnect: Promise<void> | null; busyAfterWrites: number | null };
 }
 
 const rig = (device: FakeDispenserOptions = {}, opts: ClientOptions = {}): Rig => {
   const t = createFakeTransport({ [ID]: device });
   const counts = { connects: 0, disconnects: 0 };
+  const gate: Rig['gate'] = { disconnect: null, busyAfterWrites: null };
+  let writes = 0;
   const wrapped: BleTransport = {
     adapterState: () => t.adapterState(),
     requestPermissions: () => t.requestPermissions(),
@@ -36,19 +39,24 @@ const rig = (device: FakeDispenserOptions = {}, opts: ClientOptions = {}): Rig =
       return {
         ...c,
         characteristics: () => c.characteristics(),
-        write: (u, b) => c.write(u, b),
+        write: async (u, b) => {
+          writes += 1;
+          if (writes === gate.busyAfterWrites) device.busy = true;
+          await c.write(u, b);
+        },
         subscribe: (u, cb) => c.subscribe(u, cb),
         onDisconnect: (cb) => c.onDisconnect(cb),
-        disconnect: () => {
+        disconnect: async () => {
           counts.disconnects += 1;
-          return c.disconnect();
+          if (gate.disconnect) await gate.disconnect;
+          await c.disconnect();
         },
       };
     },
   };
   const store = createMemoryStore();
   const client = new DispenserClient(wrapped, store, { now: () => NOW, idleMs: 200, ...opts });
-  return { t, store, client, counts };
+  return { t, store, client, counts, gate };
 };
 
 const mts = (r: Rig): number[] => r.t.state(ID).writes.map((w) => w.mT);
@@ -303,12 +311,97 @@ describe('rename and remove', () => {
     expect(await r.store.get(ID)).toBeNull();
   });
 
-  it('does not resurrect a removed dispenser with a late save', async () => {
+  it('rejects an operation queued after remove and keeps the record gone', async () => {
     const r = rig();
     await r.client.add(ID, 'Hall', TZ);
-    const op = r.client.sprayNow(ID);
-    await r.client.remove(ID);
-    await op;
+    const removing = r.client.remove(ID);
+    const late = codeOf(r.client.sprayNow(ID));
+    await removing;
+    expect(await late).toBe('unreachable');
     expect(await r.store.get(ID)).toBeNull();
+    expect(r.t.state(ID).spraysSinceRefill).toBe(0);
+  });
+});
+
+describe('fix round 1', () => {
+  it('keeps a rename made while the session is opening', async () => {
+    const r = rig({ replyDelayMs: 50 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    const refreshing = r.client.refresh(ID);
+    await r.client.rename(ID, 'Lounge');
+    await refreshing;
+    const saved = await r.store.get(ID);
+    expect(saved?.name).toBe('Lounge');
+    expect(saved?.channels).toBeDefined();
+  });
+
+  it('does not connect while the idle disconnect is still in flight', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 1000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await r.client.blink(ID);
+    let release: () => void = () => undefined;
+    r.gate.disconnect = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(r.counts.disconnects).toBe(1);
+    const next = r.client.blink(ID);
+    await jest.advanceTimersByTimeAsync(100);
+    expect(r.counts.connects).toBe(1);
+    r.gate.disconnect = null;
+    release();
+    await jest.advanceTimersByTimeAsync(10);
+    await next;
+    expect(r.counts.connects).toBe(2);
+  });
+
+  it('clears stored schedules when recovery after a failed save also fails', async () => {
+    jest.useFakeTimers();
+    const r = rig({ disconnectAfter: 3 }, { scheduleGapMs: 0 });
+    r.gate.busyAfterWrites = 3;
+    await r.store.upsert({
+      id: ID,
+      name: 'Hall',
+      homeTimeZone: TZ,
+      schedules: { list: [morning], at: NOW.toISOString() },
+    });
+    const p = codeOf(r.client.saveSchedules(ID, [morning]));
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(await p).toBe('disconnected');
+    expect((await r.store.get(ID))?.schedules).toBeUndefined();
+  });
+
+  it('add on an open session still writes the name and time zone', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    const saved = await r.client.add(ID, 'Lounge', 'Europe/London');
+    expect(saved.name).toBe('Lounge');
+    expect(saved.homeTimeZone).toBe('Europe/London');
+    expect(r.counts.connects).toBe(1);
+  });
+
+  it('returns the read-back when only the trailing fetch-status fails', async () => {
+    // Writes: 102, 107, 108, 103, 109, then 107 is the 6th: drop it.
+    jest.useFakeTimers();
+    const r = rig({ disconnectAfter: 6 }, { scheduleGapMs: 0, replyTimeoutMs: 500 });
+    await r.store.upsert({
+      id: ID,
+      name: 'Hall',
+      homeTimeZone: TZ,
+      lastStatus: { batteryMv: 1, firmware: 'x', autoSpray: null, spraysSinceRefill: 0, at: 'old' },
+    });
+    const p = r.client.saveSchedules(ID, [morning]);
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(await p).toEqual([morning]);
+    expect((await r.store.get(ID))?.schedules?.list).toEqual([morning]);
+  });
+
+  it('forgets per-device state after remove', async () => {
+    const r = rig();
+    await r.client.add(ID, 'Hall', TZ);
+    await r.client.remove(ID);
+    const devices = (r.client as unknown as { devices: Map<string, unknown> }).devices;
+    expect(devices.has(ID)).toBe(false);
   });
 });
