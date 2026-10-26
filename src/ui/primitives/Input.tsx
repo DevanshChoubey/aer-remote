@@ -1,0 +1,38 @@
+import type { ReactElement } from 'react';
+import { TextInput } from 'react-native';
+import { useTheme } from '@/theme';
+
+export interface InputProps {
+  value: string;
+  onChangeText: (s: string) => void;
+  placeholder?: string;
+  onSubmitEditing?: () => void;
+  accessibilityLabel: string;
+  secure?: boolean;
+}
+
+export function Input(props: InputProps): ReactElement {
+  const theme = useTheme();
+  return (
+    <TextInput
+      value={props.value}
+      onChangeText={props.onChangeText}
+      placeholder={props.placeholder}
+      placeholderTextColor={theme.color.muted}
+      onSubmitEditing={props.onSubmitEditing}
+      accessibilityLabel={props.accessibilityLabel}
+      secureTextEntry={props.secure}
+      style={{
+        minHeight: theme.touch.min,
+        paddingHorizontal: theme.space(4),
+        borderRadius: theme.radius.md,
+        borderWidth: 1,
+        borderColor: theme.color.border,
+        backgroundColor: theme.color.surface,
+        color: theme.color.ink,
+        fontFamily: theme.font.body,
+        fontSize: theme.size.body,
+      }}
+    />
+  );
+}

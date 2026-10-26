@@ -176,10 +176,11 @@ module.exports = [
       'import/no-default-export': 'off',
     },
   },
-  // Throwaway hardware spike: raw RN components and service modules are allowed here only.
+  // Throwaway hardware spike: it drives the BLE and device services directly, so service-module
+  // imports are allowed here only (it uses the shared primitives for its UI).
   {
     files: ['app/dev/spike.tsx'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: { 'no-restricted-imports': ['error', rnVisualRestriction] },
   },
   // Tests may use any import.
   {

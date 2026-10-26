@@ -1,0 +1,69 @@
+import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
+import { Nunito_500Medium, Nunito_700Bold } from '@expo-google-fonts/nunito';
+import { useFonts } from 'expo-font';
+import { createContext, useContext, useMemo, useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
+import { useColorScheme } from 'react-native';
+import { darkTokens, lightTokens } from './tokens';
+import type { Tokens } from './tokens';
+
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+interface ThemeValue {
+  tokens: Tokens;
+  preference: ThemePreference;
+  setPreference: (p: ThemePreference) => void;
+}
+
+const ThemeContext = createContext<ThemeValue>({
+  tokens: lightTokens,
+  preference: 'system',
+  setPreference: () => undefined,
+});
+
+export interface ThemeProviderProps {
+  children: ReactNode;
+  /** Forces a scheme (tests, previews); ignores the system and the preference. */
+  scheme?: 'light' | 'dark';
+  /** Starting preference, e.g. the one Settings saved. Defaults to following the system. */
+  initialPreference?: ThemePreference;
+  /** Called when the preference changes, so Settings can persist it. */
+  onPreferenceChange?: (p: ThemePreference) => void;
+}
+
+export function ThemeProvider(props: ThemeProviderProps): ReactElement {
+  const system = useColorScheme();
+  const [preference, setPreferenceState] = useState<ThemePreference>(
+    props.initialPreference ?? 'system',
+  );
+  // Children render immediately; text uses the system font until the families below are loaded.
+  useFonts({ Fraunces_700Bold, Nunito_500Medium, Nunito_700Bold });
+  const { onPreferenceChange } = props;
+  const value = useMemo<ThemeValue>(() => {
+    const scheme =
+      props.scheme ??
+      (preference === 'system' ? (system === 'dark' ? 'dark' : 'light') : preference);
+    return {
+      tokens: scheme === 'dark' ? darkTokens : lightTokens,
+      preference,
+      setPreference: (p) => {
+        setPreferenceState(p);
+        onPreferenceChange?.(p);
+      },
+    };
+  }, [props.scheme, preference, system, onPreferenceChange]);
+  return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
+}
+
+export function useTheme(): Tokens {
+  return useContext(ThemeContext).tokens;
+}
+
+/** The system/light/dark choice, for the Settings screen. */
+export function useThemePreference(): {
+  preference: ThemePreference;
+  setPreference: (p: ThemePreference) => void;
+} {
+  const { preference, setPreference } = useContext(ThemeContext);
+  return { preference, setPreference };
+}

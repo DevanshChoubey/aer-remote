@@ -1,7 +1,6 @@
-// Dev-only hardware spike (Task 7). Throwaway: plain React Native, no theme, no copy catalogue.
+// Dev-only hardware spike (Task 7). Throwaway: themed with the shared primitives, no copy catalogue.
 import { Redirect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { createRnTransport } from '@/ble/rnTransport';
 import type { BleConnection, BleTransport, FoundDevice } from '@/ble/transport';
@@ -21,6 +20,8 @@ import {
 import { parseSchedules, type Reply } from '@/protocol/replies';
 import type { Schedule } from '@/protocol/schedule';
 import { parseStatus } from '@/protocol/status';
+import { ThemeProvider } from '@/theme';
+import { Box, Button, Column, Row, Screen, Txt } from '@/ui';
 
 const hex = (b: Uint8Array): string =>
   Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(' ');
@@ -111,7 +112,7 @@ function logged(conn: BleConnection, log: Log): BleConnection {
   };
 }
 
-export default function Spike(): React.JSX.Element {
+function SpikeScreen(): React.JSX.Element {
   const [lines, setLines] = useState<string[]>([]);
   const [found, setFound] = useState<FoundDevice[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -287,70 +288,46 @@ export default function Spike(): React.JSX.Element {
   if (!__DEV__) return <Redirect href="/" />;
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>BLE spike (dev only)</Text>
-      <View style={styles.row}>
+    <Screen title="BLE spike (dev only)" scroll>
+      <Row gap={2} wrap>
         {found.map((d) => (
-          <Pressable
+          <Button
             key={d.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Select ${d.name ?? d.id}`}
-            accessibilityState={{ selected: selected === d.id }}
-            style={[styles.btn, selected === d.id && styles.selected]}
+            variant={selected === d.id ? 'primary' : 'secondary'}
+            label={`${selected === d.id ? '* ' : ''}${d.name ?? 'device'} ${d.id}`}
             onPress={() => setSelected(d.id)}
-          >
-            <Text>{`${selected === d.id ? '* ' : ''}${d.name ?? 'device'} ${d.id}`}</Text>
-          </Pressable>
+          />
         ))}
-      </View>
-      <View style={styles.row}>
+      </Row>
+      <Row gap={2} wrap>
         {actions.map(([label, fn]) => (
-          <Pressable
+          <Button
             key={label}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            accessibilityState={{ disabled: busy }}
+            variant="secondary"
+            label={label}
             disabled={busy}
-            style={[styles.btn, busy && styles.dim]}
             onPress={() => void run(label, fn)}
-          >
-            <Text>{label}</Text>
-          </Pressable>
+          />
         ))}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Clear log"
-          style={styles.btn}
-          onPress={() => setLines([])}
-        >
-          <Text>Clear log</Text>
-        </Pressable>
-      </View>
-      <ScrollView style={styles.log}>
-        {lines.map((l, i) => (
-          <Text key={i} selectable style={styles.mono}>
-            {l}
-          </Text>
-        ))}
-      </ScrollView>
-    </View>
+        <Button variant="ghost" label="Clear log" onPress={() => setLines([])} />
+      </Row>
+      <Box bg="surface" border="border" radius="sm" p={2}>
+        <Column>
+          {lines.map((l, i) => (
+            <Txt key={i} variant="caption" selectable>
+              {l}
+            </Txt>
+          ))}
+        </Column>
+      </Box>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, padding: 16, paddingTop: 48, gap: 8 },
-  title: { fontSize: 18, fontWeight: '700' },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  btn: {
-    minHeight: 48,
-    minWidth: 48,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-  },
-  selected: { borderWidth: 3 },
-  dim: { opacity: 0.4 },
-  log: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 8 },
-  mono: { fontSize: 11 },
-});
+export default function Spike(): React.JSX.Element {
+  return (
+    <ThemeProvider>
+      <SpikeScreen />
+    </ThemeProvider>
+  );
+}

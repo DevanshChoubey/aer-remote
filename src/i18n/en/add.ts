@@ -1,0 +1,15 @@
+export default {
+  title: 'Add dispenser',
+  intro: 'Switch the dispenser on and keep your phone close. Close the Godrej app first.',
+  scan: 'Look for dispensers',
+  scanning: 'Looking for dispensers…',
+  none: 'No dispensers found yet. Move closer and try again.',
+  found: 'Found nearby',
+  pick: 'Choose {name}',
+  blink: 'Blink its light',
+  blinkHint: 'The light on the dispenser will blink so you know which one it is.',
+  nameLabel: 'Name',
+  namePlaceholder: 'Living room',
+  timeZoneLabel: 'Home time zone',
+  confirm: 'Save dispenser',
+} as const;
