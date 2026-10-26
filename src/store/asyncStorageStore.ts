@@ -39,7 +39,13 @@ export function createAsyncStorageStore(storage: KeyValueStorage): DispenserStor
     });
     tail = run.catch(() => undefined);
     return run.then(() => {
-      for (const cb of [...subs]) cb();
+      for (const cb of [...subs]) {
+        try {
+          cb();
+        } catch {
+          // A faulty subscriber must not fail the write or starve the others.
+        }
+      }
     });
   };
 

@@ -83,3 +83,17 @@ describe('async storage store', () => {
     expect((await s.list()).map((d) => d.id).sort()).toEqual(['a', 'b']);
   });
 });
+
+describe.each(suites)('%s subscribers', (_name, make) => {
+  it('a throwing subscriber neither fails the write nor skips the others', async () => {
+    const s = make();
+    const good = jest.fn();
+    s.subscribe(() => {
+      throw new Error('boom');
+    });
+    s.subscribe(good);
+    await expect(s.upsert(a)).resolves.toBeUndefined();
+    await expect(s.remove('a')).resolves.toBeUndefined();
+    expect(good).toHaveBeenCalledTimes(2);
+  });
+});

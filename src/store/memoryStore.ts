@@ -4,7 +4,13 @@ export function createMemoryStore(): DispenserStore {
   const items = new Map<string, SavedDispenser>();
   const subs = new Set<() => void>();
   const notify = (): void => {
-    for (const cb of [...subs]) cb();
+    for (const cb of [...subs]) {
+      try {
+        cb();
+      } catch {
+        // A faulty subscriber must not fail the write or starve the others.
+      }
+    }
   };
   return {
     async list() {
