@@ -25,6 +25,7 @@ import {
   Txt,
 } from '@/ui';
 
+import { formatWhen } from '../home/format';
 import { formatSchedule } from '../schedule/format';
 import { useDispenser } from './useDispenser';
 
@@ -134,6 +135,9 @@ export function DispenserScreen(): ReactElement {
                 <StatusBadge kind="battery" percent={battery} />
                 <StatusBadge kind="refill" percent={refill} />
               </Row>
+              <Txt variant="caption" color="muted">
+                {t('home.lastChecked', { when: formatWhen(lastStatus.at, new Date()) })}
+              </Txt>
               <Txt variant="caption" color="muted">
                 {t('dispenser.firmware', { version: lastStatus.firmware })}
               </Txt>

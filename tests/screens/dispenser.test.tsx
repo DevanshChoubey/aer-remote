@@ -95,6 +95,30 @@ describe('DispenserScreen', () => {
     await done(services);
   });
 
+  it('shows how old the cached status is when the dispenser is out of reach', async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60_000).toISOString();
+    const { services } = await mount({
+      busy: true,
+      saved: {
+        lastStatus: {
+          batteryMv: 3000,
+          firmware: '1.0.0',
+          autoSpray: null,
+          spraysSinceRefill: 0,
+          at: threeHoursAgo,
+        },
+      },
+    });
+    expect(await screen.findByText('Last checked 3 h ago')).toBeTruthy();
+    await done(services);
+  });
+
+  it('says the status was just checked after a refresh', async () => {
+    const { services } = await mount();
+    expect(await screen.findByText('Last checked just now')).toBeTruthy();
+    await done(services);
+  });
+
   it('sprays on demand', async () => {
     const { fake, services } = await mount();
     await screen.findByText('Battery 50%');
