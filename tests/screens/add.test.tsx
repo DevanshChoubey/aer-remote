@@ -11,6 +11,17 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+// Stand-in that shows its behavior, so the tests can see where the keyboard handling sits.
+jest.mock('react-native/Libraries/Components/Keyboard/KeyboardAvoidingView', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({ behavior, children }: { behavior?: string; children: React.ReactNode }) => (
+      <View testID={`keyboard-avoiding-${behavior ?? 'none'}`}>{children}</View>
+    ),
+  };
+});
+
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
@@ -40,6 +51,8 @@ describe('AddScreen', () => {
     await fireEvent.press(screen.getByLabelText('Choose Dispenser 1'));
     const name = await screen.findByLabelText('Name');
     expect(name.props.value).toBe('Air freshener');
+    // Screen owns the keyboard handling; the name step adds no second one.
+    expect(screen.getAllByTestId(/^keyboard-avoiding-/)).toHaveLength(1);
     await fireEvent.changeText(name, 'Hall');
     await fireEvent.press(screen.getByLabelText('Save dispenser'));
 

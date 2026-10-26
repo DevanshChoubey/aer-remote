@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useRef, useState, type ReactElement } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 
 import { useServices } from '@/core';
 import { t } from '@/i18n';
@@ -68,34 +68,29 @@ export function AddScreen(): ReactElement {
 
   if (chosen) {
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <Screen title={t('add.nameTitle')} scroll>
-          <Column gap={4}>
-            <Txt color="muted">{t('add.nameLabel')}</Txt>
-            <Input
-              value={name}
-              onChangeText={setName}
-              placeholder={t('add.namePlaceholder')}
-              accessibilityLabel={t('add.nameLabel')}
-              onSubmitEditing={() => void save(chosen)}
-            />
-            {errorLine}
-            <Button label={t('add.confirm')} onPress={() => void save(chosen)} loading={saving} />
-            <Button
-              variant="ghost"
-              label={t('add.differentOne')}
-              disabled={saving}
-              onPress={() => {
-                setChosen(null);
-                scan.start();
-              }}
-            />
-          </Column>
-        </Screen>
-      </KeyboardAvoidingView>
+      <Screen title={t('add.nameTitle')} scroll>
+        <Column gap={4}>
+          <Txt color="muted">{t('add.nameLabel')}</Txt>
+          <Input
+            value={name}
+            onChangeText={setName}
+            placeholder={t('add.namePlaceholder')}
+            accessibilityLabel={t('add.nameLabel')}
+            onSubmitEditing={() => void save(chosen)}
+          />
+          {errorLine}
+          <Button label={t('add.confirm')} onPress={() => void save(chosen)} loading={saving} />
+          <Button
+            variant="ghost"
+            label={t('add.differentOne')}
+            disabled={saving}
+            onPress={() => {
+              setChosen(null);
+              scan.start();
+            }}
+          />
+        </Column>
+      </Screen>
     );
   }
 

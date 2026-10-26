@@ -1,12 +1,38 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { ThemeProvider } from '@/theme';
-import { Button, Card, Chip, EmptyState, StatusBadge, Toggle } from '@/ui';
+import { Button, Card, Chip, EmptyState, Screen, StatusBadge, Toggle, Txt } from '@/ui';
+
+// Stand-in that shows its behavior, so the tests can see where the keyboard handling sits.
+jest.mock('react-native/Libraries/Components/Keyboard/KeyboardAvoidingView', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({ behavior, children }: { behavior?: string; children: React.ReactNode }) => (
+      <View testID={`keyboard-avoiding-${behavior ?? 'none'}`}>{children}</View>
+    ),
+  };
+});
 
 function wrap(node: React.ReactElement): React.ReactElement {
   return <ThemeProvider scheme="light">{node}</ThemeProvider>;
 }
 
 describe('ui kit', () => {
+  it.each([false, true])(
+    'Screen (scroll %s) keeps its content above the keyboard',
+    async (scroll) => {
+      await render(
+        wrap(
+          <Screen title="Name" scroll={scroll}>
+            <Txt>body</Txt>
+          </Screen>,
+        ),
+      );
+      expect(screen.getAllByTestId('keyboard-avoiding-padding')).toHaveLength(1); // Jest runs as iOS
+      expect(screen.getByText('body')).toBeTruthy();
+    },
+  );
+
   it('Button fires onPress and is blocked while loading', async () => {
     const onPress = jest.fn();
     const { rerender } = await render(wrap(<Button label="Spray now" onPress={onPress} />));

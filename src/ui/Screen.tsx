@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { FlatList } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { Box, Column, Txt } from './primitives';
@@ -22,17 +22,23 @@ export function Screen(props: ScreenProps): ReactElement {
   );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.bg }}>
-      {props.scroll ? (
-        // A one-row FlatList is the scroll container available outside the primitives.
-        <FlatList
-          data={ONE_PAGE}
-          keyExtractor={(n) => String(n)}
-          renderItem={() => content}
-          keyboardShouldPersistTaps="handled"
-        />
-      ) : (
-        <Box flex={1}>{content}</Box>
-      )}
+      {/* Keeps inputs (rename, zone search, name) above the keyboard; Android resizes by itself. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {props.scroll ? (
+          // A one-row FlatList is the scroll container available outside the primitives.
+          <FlatList
+            data={ONE_PAGE}
+            keyExtractor={(n) => String(n)}
+            renderItem={() => content}
+            keyboardShouldPersistTaps="handled"
+          />
+        ) : (
+          <Box flex={1}>{content}</Box>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
