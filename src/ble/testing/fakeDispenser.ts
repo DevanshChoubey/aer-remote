@@ -1,0 +1,288 @@
+import {
+  decodeFirst,
+  encodeMap,
+  type CborEntry,
+  type CborMap,
+  type CborValue,
+} from '@/protocol/cbor';
+import { MT } from '@/protocol/messages';
+import { toReply } from '@/protocol/replies';
+import { charUuid, DEFAULT_CHANNELS } from '@/protocol/uuids';
+import {
+  decodeScheduleEntry,
+  encodeScheduleEntry,
+  type Interval,
+  type Schedule,
+} from '@/protocol/schedule';
+import type { BleCharacteristic, BleConnection, BleTransport, FoundDevice } from '@/ble/transport';
+
+export interface FakeDispenserOptions {
+  /** Characteristic that accepts command messages. Defaults to ...0003. */
+  commandChar?: string;
+  /** connect() rejects. */
+  busy?: boolean;
+  batteryMv?: number;
+  /** Every reply is delivered as 2 notifications. */
+  splitReplies?: boolean;
+  /** Writes are applied but no reply is ever sent. */
+  dropReplies?: boolean;
+  /** Before each reply, send a stale reply carrying mN - 1. */
+  lateReplyFromPrevious?: boolean;
+  /** The nth write (per connection) is applied, gets no reply, and the link drops. */
+  disconnectAfter?: number;
+}
+
+export interface FakeDispenserState {
+  schedules: Schedule[];
+  autoSpray: Interval | null;
+  spraysSinceRefill: number;
+  time?: number;
+  ledBlinks: number;
+  writes: { char: string; mT: number }[];
+}
+
+export type FakeTransport = BleTransport & { state(id: string): FakeDispenserState };
+
+const REPLY_OFFSET = 50;
+const AUTO_SPRAY_CODE: Record<Interval, number> = { 10: 121, 20: 122, 40: 123 };
+const NO_AUTO_SPRAY_CODE = 111;
+const DEFAULT_BATTERY_MV = 3000;
+const FIRMWARE = '1.0.0';
+
+const isMap = (v: CborValue | undefined): v is CborMap =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) && !(v instanceof Uint8Array);
+
+const isInterval = (n: unknown): n is Interval => n === 10 || n === 20 || n === 40;
+
+const numberOf = (v: CborValue | undefined): number | undefined =>
+  typeof v === 'number' ? v : typeof v === 'bigint' ? Number(v) : undefined;
+
+const nextTick = (): Promise<void> => Promise.resolve();
+
+interface Device {
+  options: FakeDispenserOptions;
+  state: FakeDispenserState;
+}
+
+function bytesOf(v: CborValue | undefined): Uint8Array | null {
+  if (v instanceof Uint8Array) return v;
+  if (Array.isArray(v) && v.every((x) => typeof x === 'number'))
+    return Uint8Array.from(v as number[]);
+  return null;
+}
+
+/** Apply a decoded request to the device state; returns the extra reply fields. */
+function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
+  const { state, options } = device;
+  switch (mT) {
+    case MT.setTime: {
+      const eP = numberOf(body.eP);
+      if (eP !== undefined) state.time = eP;
+      return [];
+    }
+    case MT.setSchedules: {
+      const list = body.S;
+      const next: Schedule[] = [];
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          const bytes = isMap(item) ? bytesOf(item.s) : null;
+          if (bytes) next.push(decodeScheduleEntry(bytes));
+        }
+      }
+      state.schedules = next;
+      return [];
+    }
+    case MT.sprayNow: {
+      state.spraysSinceRefill += 1;
+      if (isInterval(body.rI)) state.autoSpray = body.rI;
+      return [];
+    }
+    case MT.refill:
+      state.spraysSinceRefill = 0;
+      return [];
+    case MT.stop:
+      state.autoSpray = null;
+      return [];
+    case MT.fetchStatus:
+      return [
+        ['bV', options.batteryMv ?? DEFAULT_BATTERY_MV],
+        ['fV', FIRMWARE],
+        ['cS', state.autoSpray ? AUTO_SPRAY_CODE[state.autoSpray] : NO_AUTO_SPRAY_CODE],
+        ['sC', state.spraysSinceRefill],
+      ];
+    case MT.removeSchedules:
+      state.schedules = [];
+      return [];
+    case MT.retrieveSchedules:
+      return [['S', state.schedules.map((s) => ({ s: encodeScheduleEntry(s) }))]];
+    case MT.testLed:
+      state.ledBlinks += 1;
+      return [];
+    default:
+      return null;
+  }
+}
+
+function createConnection(id: string, device: Device): BleConnection {
+  const { options } = device;
+  const commandChar = options.commandChar ?? DEFAULT_CHANNELS.command;
+  const replyChar = DEFAULT_CHANNELS.reply;
+  const scheduleChar = DEFAULT_CHANNELS.schedule;
+  const subscribers = new Set<(b: Uint8Array) => void>();
+  const disconnectCbs = new Set<() => void>();
+  const pending = new Map<string, Uint8Array>();
+  let connected = true;
+  let writeCount = 0;
+
+  const drop = (): void => {
+    if (!connected) return;
+    connected = false;
+    subscribers.clear();
+    for (const cb of [...disconnectCbs]) cb();
+  };
+
+  const notify = (bytes: Uint8Array): void => {
+    if (options.splitReplies && bytes.length > 1) {
+      const cut = Math.ceil(bytes.length / 2);
+      const chunks = [bytes.slice(0, cut), bytes.slice(cut)];
+      for (const c of chunks) for (const cb of [...subscribers]) cb(c);
+      return;
+    }
+    for (const cb of [...subscribers]) cb(bytes);
+  };
+
+  const encodeReply = (mT: number, mN: number, extra: CborEntry[]): Uint8Array =>
+    encodeMap([['mT', mT + REPLY_OFFSET], ['mN', mN], ['ack', 200], ...extra]);
+
+  const handleMessage = async (char: string, value: CborValue): Promise<void> => {
+    const msg = toReply(value);
+    if (!msg) return;
+    device.state.writes.push({ char, mT: msg.mT });
+    writeCount += 1;
+    const accepted = msg.mT === MT.setSchedules ? char === scheduleChar : char === commandChar;
+    const extra = accepted ? apply(device, msg.mT, msg.body) : null;
+    if (options.disconnectAfter !== undefined && writeCount >= options.disconnectAfter) {
+      await nextTick();
+      drop();
+      return;
+    }
+    if (extra === null || options.dropReplies) return;
+    await nextTick();
+    if (!connected) return;
+    if (options.lateReplyFromPrevious) notify(encodeReply(msg.mT, msg.mN - 1, extra));
+    notify(encodeReply(msg.mT, msg.mN, extra));
+  };
+
+  return {
+    deviceId: id,
+    async characteristics(): Promise<BleCharacteristic[]> {
+      return [
+        { uuid: replyChar, writable: false, notifiable: true },
+        { uuid: charUuid('0002'), writable: true, notifiable: false },
+        { uuid: charUuid('0003'), writable: true, notifiable: false },
+        { uuid: scheduleChar, writable: true, notifiable: false },
+      ];
+    },
+    async write(char, bytes): Promise<void> {
+      if (!connected) throw new Error('Not connected');
+      const prior = pending.get(char);
+      let buf = bytes;
+      if (prior) {
+        buf = new Uint8Array(prior.length + bytes.length);
+        buf.set(prior, 0);
+        buf.set(bytes, prior.length);
+      }
+      for (;;) {
+        let decoded: ReturnType<typeof decodeFirst>;
+        try {
+          decoded = decodeFirst(buf);
+        } catch {
+          pending.delete(char);
+          return;
+        }
+        if (decoded === null) {
+          pending.set(char, buf);
+          return;
+        }
+        buf = buf.slice(decoded.length);
+        void handleMessage(char, decoded.value);
+        if (buf.length === 0) {
+          pending.delete(char);
+          return;
+        }
+      }
+    },
+    async subscribe(char, onData): Promise<() => void> {
+      if (!connected) throw new Error('Not connected');
+      if (char !== replyChar) throw new Error('Characteristic cannot notify');
+      subscribers.add(onData);
+      return () => {
+        subscribers.delete(onData);
+      };
+    },
+    onDisconnect(cb): () => void {
+      disconnectCbs.add(cb);
+      return () => {
+        disconnectCbs.delete(cb);
+      };
+    },
+    async disconnect(): Promise<void> {
+      drop();
+    },
+  };
+}
+
+export function createFakeTransport(devices: Record<string, FakeDispenserOptions>): FakeTransport {
+  const registry = new Map<string, Device>();
+  for (const [id, options] of Object.entries(devices)) {
+    registry.set(id, {
+      options,
+      state: { schedules: [], autoSpray: null, spraysSinceRefill: 0, ledBlinks: 0, writes: [] },
+    });
+  }
+  const lookup = (id: string): Device => {
+    const device = registry.get(id);
+    if (!device) throw new Error(`Unknown fake device ${id}`);
+    return device;
+  };
+
+  return {
+    async adapterState() {
+      return 'on';
+    },
+    async requestPermissions() {
+      return true;
+    },
+    scan(onFound, timeoutMs) {
+      void timeoutMs;
+      let stopped = false;
+      let finish: () => void = () => undefined;
+      const done = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      void nextTick().then(() => {
+        for (const id of registry.keys()) {
+          if (stopped) break;
+          const found: FoundDevice = { id, name: 'aer', rssi: -60 };
+          onFound(found);
+        }
+        finish();
+      });
+      return {
+        stop() {
+          stopped = true;
+          finish();
+        },
+        done,
+      };
+    },
+    async connect(deviceId) {
+      const device = lookup(deviceId);
+      if (device.options.busy) throw new Error('Device is busy');
+      return createConnection(deviceId, device);
+    },
+    state(id) {
+      return lookup(id).state;
+    },
+  };
+}
