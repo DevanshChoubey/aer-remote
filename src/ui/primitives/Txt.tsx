@@ -35,7 +35,12 @@ export function Txt(props: TxtProps): ReactElement {
     color: theme.color[props.color ?? 'ink'],
   };
   return (
-    <Text style={style} numberOfLines={props.numberOfLines} selectable={props.selectable}>
+    <Text
+      accessibilityRole={variant === 'title' || variant === 'heading' ? 'header' : undefined}
+      style={style}
+      numberOfLines={props.numberOfLines}
+      selectable={props.selectable}
+    >
       {props.children}
     </Text>
   );

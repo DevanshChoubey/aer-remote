@@ -1,5 +1,15 @@
-export type DeviceErrorCode =
-  'bluetoothOff' | 'permissionDenied' | 'unreachable' | 'noReply' | 'rejected' | 'disconnected';
+/** Every failure the app explains to the user; screens map each one to errors.<code> copy. */
+export const DEVICE_ERROR_CODES = [
+  'bluetoothOff',
+  'permissionDenied',
+  'unreachable',
+  'noReply',
+  'rejected',
+  'batteryTooLow',
+  'disconnected',
+] as const;
+
+export type DeviceErrorCode = (typeof DEVICE_ERROR_CODES)[number];
 
 export class DeviceError extends Error {
   constructor(

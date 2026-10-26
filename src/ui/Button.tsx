@@ -11,6 +11,9 @@ export interface ButtonProps {
   icon?: string;
   disabled?: boolean;
   loading?: boolean;
+  selected?: boolean;
+  /** Spoken name when it differs from the visible label. */
+  accessibilityLabel?: string;
 }
 
 const LOOK: Record<
@@ -27,11 +30,21 @@ export function Button(props: ButtonProps): ReactElement {
   const look = LOOK[props.variant ?? 'primary'];
   const blocked = props.disabled === true || props.loading === true;
   return (
-    <Touchable onPress={props.onPress} accessibilityLabel={props.label} disabled={blocked}>
+    <Touchable
+      onPress={props.onPress}
+      accessibilityLabel={props.accessibilityLabel ?? props.label}
+      disabled={blocked}
+      selected={props.selected}
+      busy={props.loading === true ? true : undefined}
+    >
       <Box bg={look.bg} border={look.border} radius="pill" px={6} py={4}>
         <Row gap={2} align="center" justify="center">
           {props.loading ? (
-            <ActivityIndicator color={theme.color[look.text]} />
+            <ActivityIndicator
+              color={theme.color[look.text]}
+              accessible={false}
+              importantForAccessibility="no"
+            />
           ) : props.icon ? (
             <Txt variant="bodyBold" color={look.text}>
               {props.icon}

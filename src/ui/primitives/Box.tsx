@@ -22,6 +22,7 @@ export interface BoxProps {
   children?: ReactNode;
   testID?: string;
   accessibilityLabel?: string;
+  selected?: boolean;
 }
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -65,6 +66,7 @@ export function Box(props: BoxProps): ReactElement {
       testID={props.testID}
       accessible={props.accessibilityLabel ? true : undefined}
       accessibilityLabel={props.accessibilityLabel}
+      accessibilityState={props.selected === undefined ? undefined : { selected: props.selected }}
     >
       {props.children}
     </View>

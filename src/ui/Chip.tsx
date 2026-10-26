@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react';
-import { t } from '@/i18n';
 import type { ColorToken } from '@/theme';
 import { Box, Touchable, Txt } from './primitives';
 
@@ -18,20 +17,29 @@ const LOOK: Record<ChipState, { bg: ColorToken; border: ColorToken; text: ColorT
 
 export function Chip(props: ChipProps): ReactElement {
   const look = LOOK[props.state];
+  const selected = props.state === 'selected';
   const body = (
-    <Box bg={look.bg} border={look.border} radius="pill" px={4} py={2}>
+    <Box
+      bg={look.bg}
+      border={look.border}
+      radius="pill"
+      px={4}
+      py={2}
+      accessibilityLabel={props.onToggle ? undefined : props.label}
+      selected={props.onToggle ? undefined : selected}
+    >
       <Txt variant="bodyBold" color={look.text}>
         {props.label}
       </Txt>
     </Box>
   );
   if (!props.onToggle) return body;
-  const selected = props.state === 'selected';
   return (
     <Touchable
       onPress={props.onToggle}
       selected={selected}
-      accessibilityLabel={selected ? t('common.chipSelected', { label: props.label }) : props.label}
+      accessibilityRole="togglebutton"
+      accessibilityLabel={props.label}
     >
       {body}
     </Touchable>

@@ -44,7 +44,9 @@ describe('tokens', () => {
       ['ink', 'bg'],
       ['ink', 'surface'],
       ['ink', 'soft'],
+      ['muted', 'bg'],
       ['muted', 'surface'],
+      ['deepTerracotta', 'soft'],
       ['accentInk', 'accent'],
       ['deepTerracotta', 'surface'],
       ['warn', 'warnSoft'],
@@ -52,6 +54,16 @@ describe('tokens', () => {
     ];
     it.each(pairs)('%s on %s >= 4.5', (fg, bg) => {
       expect(contrast(tokens.color[fg], tokens.color[bg])).toBeGreaterThanOrEqual(4.5);
+    });
+    // Non-text contrast (WCAG 1.4.11): the off switch must be visible against the page.
+    it('track on bg >= 3', () => {
+      expect(contrast(tokens.color.track, tokens.color.bg)).toBeGreaterThanOrEqual(3);
+    });
+    it('thumb (surface) on track >= 3', () => {
+      expect(contrast(tokens.color.surface, tokens.color.track)).toBeGreaterThanOrEqual(3);
+    });
+    it('thumb (surface) on accent track >= 3', () => {
+      expect(contrast(tokens.color.surface, tokens.color.accent)).toBeGreaterThanOrEqual(3);
     });
   });
 });

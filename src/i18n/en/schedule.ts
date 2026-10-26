@@ -11,7 +11,7 @@ export default {
   delete: 'Delete schedule',
   problemEndBeforeStart: 'The end time must be after the start time.',
   problemNoDays: 'Pick at least one day.',
-  problemTooMany: 'A dispenser holds up to {max} schedules.',
+  problemTooMany: 'A dispenser holds up to {max} schedules. Delete one first.',
   problemTooManySprays: 'That is too many sprays for one window. Use a longer interval.',
   saving: 'Saving to the dispenser…',
   mon: 'Mon',

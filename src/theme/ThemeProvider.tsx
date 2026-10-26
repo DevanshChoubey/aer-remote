@@ -13,19 +13,25 @@ interface ThemeValue {
   tokens: Tokens;
   preference: ThemePreference;
   setPreference: (p: ThemePreference) => void;
+  /** True once the fonts loaded or failed; a failure falls back to system fonts, never blocks. */
+  fontsReady: boolean;
 }
 
 const ThemeContext = createContext<ThemeValue>({
   tokens: lightTokens,
   preference: 'system',
   setPreference: () => undefined,
+  fontsReady: false,
 });
 
 export interface ThemeProviderProps {
   children: ReactNode;
   /** Forces a scheme (tests, previews); ignores the system and the preference. */
   scheme?: 'light' | 'dark';
-  /** Starting preference, e.g. the one Settings saved. Defaults to following the system. */
+  /**
+   * Starting preference, e.g. the one Settings saved. It is read once at mount, so the layout must
+   * render the provider only after storage has loaded. Defaults to following the system.
+   */
   initialPreference?: ThemePreference;
   /** Called when the preference changes, so Settings can persist it. */
   onPreferenceChange?: (p: ThemePreference) => void;
@@ -37,7 +43,8 @@ export function ThemeProvider(props: ThemeProviderProps): ReactElement {
     props.initialPreference ?? 'system',
   );
   // Children render immediately; text uses the system font until the families below are loaded.
-  useFonts({ Fraunces_700Bold, Nunito_500Medium, Nunito_700Bold });
+  const [fontsLoaded, fontError] = useFonts({ Fraunces_700Bold, Nunito_500Medium, Nunito_700Bold });
+  const fontsReady = fontsLoaded || fontError !== null;
   const { onPreferenceChange } = props;
   const value = useMemo<ThemeValue>(() => {
     const scheme =
@@ -46,12 +53,13 @@ export function ThemeProvider(props: ThemeProviderProps): ReactElement {
     return {
       tokens: scheme === 'dark' ? darkTokens : lightTokens,
       preference,
+      fontsReady,
       setPreference: (p) => {
         setPreferenceState(p);
         onPreferenceChange?.(p);
       },
     };
-  }, [props.scheme, preference, system, onPreferenceChange]);
+  }, [props.scheme, preference, system, onPreferenceChange, fontsReady]);
   return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
 }
 
@@ -59,11 +67,12 @@ export function useTheme(): Tokens {
   return useContext(ThemeContext).tokens;
 }
 
-/** The system/light/dark choice, for the Settings screen. */
+/** The system/light/dark choice (Settings) and fontsReady (the layout, to hold the splash). */
 export function useThemePreference(): {
   preference: ThemePreference;
   setPreference: (p: ThemePreference) => void;
+  fontsReady: boolean;
 } {
-  const { preference, setPreference } = useContext(ThemeContext);
-  return { preference, setPreference };
+  const { preference, setPreference, fontsReady } = useContext(ThemeContext);
+  return { preference, setPreference, fontsReady };
 }

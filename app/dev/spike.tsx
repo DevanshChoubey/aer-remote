@@ -295,6 +295,8 @@ function SpikeScreen(): React.JSX.Element {
             key={d.id}
             variant={selected === d.id ? 'primary' : 'secondary'}
             label={`${selected === d.id ? '* ' : ''}${d.name ?? 'device'} ${d.id}`}
+            accessibilityLabel={`Select ${d.name ?? d.id}`}
+            selected={selected === d.id}
             onPress={() => setSelected(d.id)}
           />
         ))}

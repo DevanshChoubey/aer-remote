@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { DEVICE_ERROR_CODES } from '@/device/errors';
 import { t } from '@/i18n';
 import add from '@/i18n/en/add';
 import common from '@/i18n/en/common';
@@ -36,12 +37,22 @@ describe('i18n', () => {
   });
 
   it('interpolates variables', () => {
-    expect(t('common.batteryLabel', { percent: 42 })).toContain('42');
+    expect(t('common.levelShortOk', { name: 'Battery', percent: 42 })).toBe('Battery 42%');
   });
 
   it('throws on a missing key in dev', () => {
     expect(() => t('common.nope')).toThrow(/Missing translation key/);
     expect(() => t('nonsense.key')).toThrow();
+  });
+
+  it('throws on an unreplaced variable in dev', () => {
+    expect(() => t('common.levelShortOk', { name: 'Battery' })).toThrow(/percent/);
+    expect(t('common.appName')).toBe('Aer Remote');
+  });
+
+  it('does not resolve inherited object keys', () => {
+    expect(() => t('common.toString')).toThrow(/Missing translation key/);
+    expect(() => t('constructor.name')).toThrow();
   });
 
   it('has no empty strings', () => {
@@ -53,16 +64,8 @@ describe('i18n', () => {
   });
 
   it('has plain-words copy for every device error code', () => {
-    const codes = [
-      'bluetoothOff',
-      'permissionDenied',
-      'unreachable',
-      'noReply',
-      'rejected',
-      'batteryTooLow',
-      'disconnected',
-    ];
-    for (const code of codes) expect(t(`errors.${code}`).length).toBeGreaterThan(10);
+    for (const code of DEVICE_ERROR_CODES) expect(t(`errors.${code}`).length).toBeGreaterThan(10);
+    expect(DEVICE_ERROR_CODES).toContain('batteryTooLow');
     expect(t('errors.unreachable')).toMatch(/another phone or the Godrej app/i);
   });
 

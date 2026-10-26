@@ -22,15 +22,30 @@ describe('ui kit', () => {
     await render(wrap(<Toggle label="Auto spray" value={false} onChange={onChange} />));
     const el = screen.getByLabelText('Auto spray');
     expect(el.props.accessibilityRole).toBe('switch');
-    await fireEvent(el, 'valueChange', true);
+    expect(el.props.accessibilityState.checked).toBe(false);
+    await fireEvent.press(el);
     expect(onChange).toHaveBeenCalledWith(true);
+    expect(screen.getAllByLabelText('Auto spray')).toHaveLength(1);
   });
 
-  it('Chip toggles with a state-aware label', async () => {
+  it('Chip toggles and exposes selected through accessibility state', async () => {
     const onToggle = jest.fn();
     await render(wrap(<Chip label="Mon" state="selected" onToggle={onToggle} />));
-    await fireEvent.press(screen.getByLabelText('Mon, selected'));
+    const el = screen.getByLabelText('Mon');
+    expect(el.props.accessibilityRole).toBe('togglebutton');
+    expect(el.props.accessibilityState.selected).toBe(true);
+    await fireEvent.press(el);
     expect(onToggle).toHaveBeenCalled();
+  });
+
+  it('Chip without onToggle still exposes selected', async () => {
+    await render(wrap(<Chip label="Tue" state="neutral" />));
+    expect(screen.getByLabelText('Tue').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('Button loading is busy', async () => {
+    await render(wrap(<Button label="Save" onPress={() => undefined} loading />));
+    expect(screen.getByLabelText('Save').props.accessibilityState.busy).toBe(true);
   });
 
   it('StatusBadge says low below the threshold and ok above it', async () => {

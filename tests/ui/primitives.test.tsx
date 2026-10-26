@@ -71,6 +71,38 @@ function Probe(): React.ReactElement {
   );
 }
 
+describe('Txt roles', () => {
+  it('title and heading are headers, body is not', async () => {
+    await render(
+      wrap(
+        <>
+          <Txt variant="title">T</Txt>
+          <Txt variant="heading">H</Txt>
+          <Txt>B</Txt>
+        </>,
+      ),
+    );
+    expect(screen.getByText('T').props.accessibilityRole).toBe('header');
+    expect(screen.getByText('H').props.accessibilityRole).toBe('header');
+    expect(screen.getByText('B').props.accessibilityRole).toBeUndefined();
+  });
+});
+
+describe('theme fonts', () => {
+  it('exposes fontsReady as a boolean', async () => {
+    function F(): React.ReactElement {
+      const { fontsReady } = useThemePreference();
+      return <Txt>{`ready:${typeof fontsReady}`}</Txt>;
+    }
+    await render(
+      <ThemeProvider>
+        <F />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('ready:boolean')).toBeTruthy();
+  });
+});
+
 describe('theme preference', () => {
   it('lets the user override the system scheme', async () => {
     await render(

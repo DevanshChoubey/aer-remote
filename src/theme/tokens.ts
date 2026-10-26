@@ -15,6 +15,7 @@ export interface Tokens {
     warnSoft: string;
     ok: string;
     okSoft: string;
+    track: string;
   };
   font: { heading: string; body: string; bodyBold: string };
   size: { title: number; heading: number; body: number; caption: number };
@@ -53,7 +54,7 @@ export const lightTokens: Tokens = {
     stage: '#f4dfbd',
     surface: '#fff8ec',
     ink: '#3d2216',
-    muted: '#8b6b57',
+    muted: '#866650',
     accent: '#c4502a',
     accentInk: '#fffdf8',
     soft: '#f7dfb9',
@@ -64,6 +65,7 @@ export const lightTokens: Tokens = {
     warnSoft: '#f9d9c9',
     ok: '#3b6232',
     okSoft: '#e2ebcd',
+    track: '#9a7a60',
   },
   shadow: {
     card: {
@@ -89,11 +91,12 @@ export const darkTokens: Tokens = {
     soft: '#4a3022',
     border: '#5a3e2c',
     saffron: '#f0b56e',
-    deepTerracotta: '#d9724b',
+    deepTerracotta: '#e9855f',
     warn: '#f3a98b',
     warnSoft: '#51281a',
     ok: '#a9d69c',
     okSoft: '#2e3f27',
+    track: '#9a7b63',
   },
   shadow: {
     card: {

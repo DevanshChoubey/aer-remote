@@ -5,7 +5,6 @@ export default {
   autoEvery: 'Every {minutes} minutes',
   autoOff: 'Off',
   status: 'Status',
-  battery: 'Battery',
   refill: 'Refill left',
   refillReset: 'I refilled it',
   refillResetConfirm: 'Reset the refill level to full?',
