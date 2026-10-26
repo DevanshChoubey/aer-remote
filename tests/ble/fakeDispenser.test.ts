@@ -1,9 +1,11 @@
 import { createFakeTransport } from '@/ble/testing/fakeDispenser';
 import type { BleConnection } from '@/ble/transport';
-import { decodeFirst } from '@/protocol/cbor';
+import { decodeFirst, encodeMap } from '@/protocol/cbor';
 import {
   fetchStatusMsg,
   refillMsg,
+  removeSchedulesMsg,
+  setTimeMsg,
   retrieveSchedulesMsg,
   setSchedulesMsg,
   sprayNowMsg,
@@ -76,6 +78,12 @@ describe('fake dispenser', () => {
     expect(reply(chunks[0] ?? new Uint8Array()).mT).toBe(153);
     expect(parseSchedules(reply(chunks[1] ?? new Uint8Array()))).toEqual([sched]);
     expect(t.state('d1').schedules).toEqual([sched]);
+    await conn.write(DEFAULT_CHANNELS.command, removeSchedulesMsg(3).bytes);
+    await conn.write(DEFAULT_CHANNELS.command, retrieveSchedulesMsg(4).bytes);
+    await flush();
+    expect(reply(chunks[2] ?? new Uint8Array()).mT).toBe(158);
+    expect(parseSchedules(reply(chunks[3] ?? new Uint8Array()))).toEqual([]);
+    expect(t.state('d1').schedules).toEqual([]);
   });
 
   it('tracks spray, stop, refill and led state', async () => {
@@ -159,5 +167,117 @@ describe('fake dispenser', () => {
     expect(found).toEqual(['d1']);
     expect(await t.adapterState()).toBe('on');
     expect(await t.requestPermissions()).toBe(true);
+  });
+
+  it('records setTime', async () => {
+    const { conn, chunks, t } = await open();
+    const tz = { standardOffsetMin: 330, dstSavingsMs: 0 };
+    await conn.write(DEFAULT_CHANNELS.command, setTimeMsg(1, 1700000000, tz).bytes);
+    await flush();
+    expect(chunks).toHaveLength(1);
+    expect(t.state('d1').time).toBe(1700000000);
+  });
+
+  it.each([
+    [10, 121],
+    [40, 123],
+  ] as const)('reports cS for interval %i', async (interval, code) => {
+    const { conn, chunks } = await open();
+    await conn.write(DEFAULT_CHANNELS.command, sprayNowMsg(1, interval).bytes);
+    await conn.write(DEFAULT_CHANNELS.command, fetchStatusMsg(2).bytes);
+    await flush();
+    expect(reply(chunks[1] ?? new Uint8Array()).body.cS).toBe(code);
+  });
+
+  it('ignores wrong-channel messages but records the write', async () => {
+    const { conn, chunks, t } = await open();
+    await conn.write(DEFAULT_CHANNELS.command, setSchedulesMsg(1, [sched]).bytes);
+    await conn.write(DEFAULT_CHANNELS.schedule, testLedMsg(2).bytes);
+    await conn.write(charUuid('0002'), testLedMsg(3).bytes);
+    await flush();
+    expect(chunks).toHaveLength(0);
+    expect(t.state('d1')).toMatchObject({ schedules: [], ledBlinks: 0 });
+    expect(t.state('d1').writes).toEqual([
+      { char: DEFAULT_CHANNELS.command, mT: 103 },
+      { char: DEFAULT_CHANNELS.schedule, mT: 113 },
+      { char: charUuid('0002'), mT: 113 },
+    ]);
+  });
+
+  it('allows one live connection per device', async () => {
+    const t = createFakeTransport({ d1: {} });
+    const a = await t.connect('d1', 1000);
+    await expect(t.connect('d1', 1000)).rejects.toThrow();
+    await a.disconnect();
+    await expect(t.connect('d1', 1000)).resolves.toBeDefined();
+  });
+
+  it('disconnectAfter fires once per device across reconnects', async () => {
+    const t = createFakeTransport({ d1: { disconnectAfter: 1 } });
+    const a = await t.connect('d1', 1000);
+    await a.write(DEFAULT_CHANNELS.command, fetchStatusMsg(1).bytes);
+    await flush();
+    const b = await t.connect('d1', 1000);
+    const chunks: Uint8Array[] = [];
+    await b.subscribe(DEFAULT_CHANNELS.reply, (x) => chunks.push(x));
+    await b.write(DEFAULT_CHANNELS.command, fetchStatusMsg(2).bytes);
+    await flush();
+    expect(chunks).toHaveLength(1);
+  });
+
+  it('drops the link from the device side', async () => {
+    const t = createFakeTransport({ d1: {} });
+    const conn = await t.connect('d1', 1000);
+    const dropped = jest.fn();
+    conn.onDisconnect(dropped);
+    t.disconnect('d1');
+    expect(dropped).toHaveBeenCalledTimes(1);
+    await expect(t.connect('d1', 1000)).resolves.toBeDefined();
+  });
+
+  it('delays replies by replyDelayMs', async () => {
+    jest.useFakeTimers();
+    try {
+      const { conn, chunks } = await open({ replyDelayMs: 500 });
+      await conn.write(DEFAULT_CHANNELS.command, fetchStatusMsg(1).bytes);
+      await jest.advanceTimersByTimeAsync(499);
+      expect(chunks).toHaveLength(0);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(chunks).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('stop clears auto-spray only when sS is true', async () => {
+    const { conn, t } = await open();
+    await conn.write(DEFAULT_CHANNELS.command, sprayNowMsg(1, 20).bytes);
+    const bad = encodeMap([
+      ['mT', 106],
+      ['mN', 2],
+      ['sS', 1],
+    ]);
+    await conn.write(DEFAULT_CHANNELS.command, bad);
+    await flush();
+    expect(t.state('d1').autoSpray).toBe(20);
+  });
+
+  it('rejects writes to non-writable or unknown characteristics', async () => {
+    const { conn, t } = await open();
+    await expect(conn.write(DEFAULT_CHANNELS.reply, fetchStatusMsg(1).bytes)).rejects.toThrow();
+    await expect(conn.write('nope', fetchStatusMsg(1).bytes)).rejects.toThrow();
+    expect(t.state('d1').writes).toHaveLength(0);
+  });
+
+  it('treats a malformed schedule entry as no reply without unhandled rejection', async () => {
+    const { conn, chunks } = await open();
+    const bad = encodeMap([
+      ['mT', 103],
+      ['mN', 1],
+      ['S', [{ s: new Uint8Array([1, 2]) }]],
+    ]);
+    await conn.write(DEFAULT_CHANNELS.schedule, bad);
+    await flush();
+    expect(chunks).toHaveLength(0);
   });
 });

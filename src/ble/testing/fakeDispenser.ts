@@ -22,13 +22,15 @@ export interface FakeDispenserOptions {
   /** connect() rejects. */
   busy?: boolean;
   batteryMv?: number;
+  /** Delay before each reply is delivered (default 0: next microtask). */
+  replyDelayMs?: number;
   /** Every reply is delivered as 2 notifications. */
   splitReplies?: boolean;
   /** Writes are applied but no reply is ever sent. */
   dropReplies?: boolean;
   /** Before each reply, send a stale reply carrying mN - 1. */
   lateReplyFromPrevious?: boolean;
-  /** The nth write (per connection) is applied, gets no reply, and the link drops. */
+  /** The nth write (counted per device, fires once) is applied, gets no reply, and the link drops. */
   disconnectAfter?: number;
 }
 
@@ -41,7 +43,11 @@ export interface FakeDispenserState {
   writes: { char: string; mT: number }[];
 }
 
-export type FakeTransport = BleTransport & { state(id: string): FakeDispenserState };
+export type FakeTransport = BleTransport & {
+  state(id: string): FakeDispenserState;
+  /** Drop the device's live link from the device side, firing onDisconnect. */
+  disconnect(id: string): void;
+};
 
 const REPLY_OFFSET = 50;
 const AUTO_SPRAY_CODE: Record<Interval, number> = { 10: 121, 20: 122, 40: 123 };
@@ -57,11 +63,15 @@ const isInterval = (n: unknown): n is Interval => n === 10 || n === 20 || n === 
 const numberOf = (v: CborValue | undefined): number | undefined =>
   typeof v === 'number' ? v : typeof v === 'bigint' ? Number(v) : undefined;
 
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 const nextTick = (): Promise<void> => Promise.resolve();
 
 interface Device {
   options: FakeDispenserOptions;
   state: FakeDispenserState;
+  writeCount: number;
+  drop: (() => void) | null;
 }
 
 function bytesOf(v: CborValue | undefined): Uint8Array | null {
@@ -101,7 +111,7 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
       state.spraysSinceRefill = 0;
       return [];
     case MT.stop:
-      state.autoSpray = null;
+      if (body.sS === true) state.autoSpray = null;
       return [];
     case MT.fetchStatus:
       return [
@@ -132,11 +142,13 @@ function createConnection(id: string, device: Device): BleConnection {
   const disconnectCbs = new Set<() => void>();
   const pending = new Map<string, Uint8Array>();
   let connected = true;
-  let writeCount = 0;
 
+  const dropRef = (): void => drop();
+  device.drop = dropRef;
   const drop = (): void => {
     if (!connected) return;
     connected = false;
+    if (device.drop === dropRef) device.drop = null;
     subscribers.clear();
     for (const cb of [...disconnectCbs]) cb();
   };
@@ -158,16 +170,22 @@ function createConnection(id: string, device: Device): BleConnection {
     const msg = toReply(value);
     if (!msg) return;
     device.state.writes.push({ char, mT: msg.mT });
-    writeCount += 1;
+    device.writeCount += 1;
     const accepted = msg.mT === MT.setSchedules ? char === scheduleChar : char === commandChar;
-    const extra = accepted ? apply(device, msg.mT, msg.body) : null;
-    if (options.disconnectAfter !== undefined && writeCount >= options.disconnectAfter) {
+    let extra: CborEntry[] | null;
+    try {
+      extra = accepted ? apply(device, msg.mT, msg.body) : null;
+    } catch {
+      return;
+    }
+    if (device.writeCount === options.disconnectAfter) {
       await nextTick();
       drop();
       return;
     }
     if (extra === null || options.dropReplies) return;
     await nextTick();
+    if (options.replyDelayMs) await delay(options.replyDelayMs);
     if (!connected) return;
     if (options.lateReplyFromPrevious) notify(encodeReply(msg.mT, msg.mN - 1, extra));
     notify(encodeReply(msg.mT, msg.mN, extra));
@@ -185,6 +203,11 @@ function createConnection(id: string, device: Device): BleConnection {
     },
     async write(char, bytes): Promise<void> {
       if (!connected) throw new Error('Not connected');
+      if (
+        char === replyChar ||
+        ![commandChar, charUuid('0002'), charUuid('0003'), scheduleChar].includes(char)
+      )
+        throw new Error('Characteristic is not writable');
       const prior = pending.get(char);
       let buf = bytes;
       if (prior) {
@@ -205,7 +228,7 @@ function createConnection(id: string, device: Device): BleConnection {
           return;
         }
         buf = buf.slice(decoded.length);
-        void handleMessage(char, decoded.value);
+        void handleMessage(char, decoded.value).catch(() => undefined);
         if (buf.length === 0) {
           pending.delete(char);
           return;
@@ -238,6 +261,8 @@ export function createFakeTransport(devices: Record<string, FakeDispenserOptions
     registry.set(id, {
       options,
       state: { schedules: [], autoSpray: null, spraysSinceRefill: 0, ledBlinks: 0, writes: [] },
+      writeCount: 0,
+      drop: null,
     });
   }
   const lookup = (id: string): Device => {
@@ -278,11 +303,14 @@ export function createFakeTransport(devices: Record<string, FakeDispenserOptions
     },
     async connect(deviceId) {
       const device = lookup(deviceId);
-      if (device.options.busy) throw new Error('Device is busy');
+      if (device.options.busy || device.drop) throw new Error('Device is busy');
       return createConnection(deviceId, device);
     },
     state(id) {
       return lookup(id).state;
+    },
+    disconnect(id) {
+      lookup(id).drop?.();
     },
   };
 }
