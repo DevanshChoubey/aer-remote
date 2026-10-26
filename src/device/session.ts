@@ -1,9 +1,9 @@
 import type { BleConnection, BleTransport } from '@/ble/transport';
-import { CborError, decodeFirst } from '@/protocol/cbor';
+import { decodeFirst } from '@/protocol/cbor';
 import { fetchStatusMsg, setTimeMsg, type OutgoingMessage } from '@/protocol/messages';
 import { toReply, type Reply } from '@/protocol/replies';
 import { parseStatus, type DeviceStatus } from '@/protocol/status';
-import { DEFAULT_CHANNELS, type Channels } from '@/protocol/uuids';
+import { charUuid, DEFAULT_CHANNELS, type Channels } from '@/protocol/uuids';
 
 import { DeviceError } from './errors';
 import { zoneInfo } from './time';
@@ -23,6 +23,8 @@ export interface OpenedSession {
   session: DispenserSession;
   channels: Channels;
   status: DeviceStatus;
+  /** True when the device acknowledged a set-time message. */
+  clockSet: boolean;
 }
 
 const DEFAULT_REPLY_TIMEOUT_MS = 3000;
@@ -33,6 +35,7 @@ const REPLY_OFFSET = 50;
 const ACK_OK = 200;
 /** A reply frame is a few dozen bytes; anything larger without a complete item is garbage. */
 const MAX_REPLY_BUFFER = 1024;
+const PROBE_CHARS: string[] = [charUuid('0002'), charUuid('0003'), charUuid('0004')];
 const MN_MIN = 100;
 const MN_MAX = 253;
 
@@ -65,7 +68,7 @@ export class DispenserSession {
   private offDisconnect: (() => void) | null = null;
   private readonly replyTimeoutMs: number;
 
-  constructor(
+  private constructor(
     private readonly conn: BleConnection,
     channels: Channels,
     private readonly opts: SessionOptions = {},
@@ -78,14 +81,23 @@ export class DispenserSession {
     return this.alive;
   }
 
-  /** Subscribe to replies and watch the link. Call once, right after construction. */
-  async start(): Promise<void> {
+  /** Wrap a live connection: subscribes to replies and watches the link. */
+  static async attach(
+    conn: BleConnection,
+    channels: Channels,
+    opts: SessionOptions = {},
+  ): Promise<DispenserSession> {
+    const session = new DispenserSession(conn, channels, opts);
+    await session.start();
+    return session;
+  }
+
+  private async start(): Promise<void> {
     this.offDisconnect = this.conn.onDisconnect(() => this.handleDrop());
     try {
       this.unsubscribe = await this.conn.subscribe(this.channels.reply, (b) => this.onData(b));
     } catch (e) {
-      this.offDisconnect();
-      this.offDisconnect = null;
+      this.cleanup();
       throw e;
     }
   }
@@ -134,6 +146,7 @@ export class DispenserSession {
     return new Promise<Reply>((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.pending?.timer === timer) this.pending = null;
+        this.buffer = new Uint8Array(0);
         reject(new DeviceError('noReply'));
       }, this.replyTimeoutMs);
       this.pending = { mT: msg.mT, mN: msg.mN, resolve, reject, timer };
@@ -154,8 +167,8 @@ export class DispenserSession {
       let item: ReturnType<typeof decodeFirst>;
       try {
         item = decodeFirst(buf);
-      } catch (e) {
-        if (!(e instanceof CborError)) throw e;
+      } catch {
+        // Corrupt frame: drop it so the session cannot stall, and never throw into the transport.
         buf = new Uint8Array(0);
         break;
       }
@@ -199,7 +212,15 @@ export class DispenserSession {
     this.alive = false;
     this.cleanup();
     this.failPending(new DeviceError('disconnected'));
-    for (const cb of [...this.disconnectCbs]) cb();
+    const cbs = [...this.disconnectCbs];
+    this.disconnectCbs.clear();
+    for (const cb of cbs) {
+      try {
+        cb();
+      } catch {
+        // One failing listener must not stop the others.
+      }
+    }
   }
 }
 
@@ -237,6 +258,21 @@ async function fetchStatus(session: DispenserSession): Promise<DeviceStatus> {
 
 const isNoReply = (e: unknown): boolean => e instanceof DeviceError && e.code === 'noReply';
 
+/** Send set-time; true when acknowledged, false on silence. Other failures propagate. */
+async function trySetClock(
+  session: DispenserSession,
+  homeTimeZone: string,
+  now: () => Date,
+): Promise<boolean> {
+  try {
+    await setClock(session, homeTimeZone, now);
+    return true;
+  } catch (e) {
+    if (!isNoReply(e)) throw e;
+    return false;
+  }
+}
+
 async function setClock(
   session: DispenserSession,
   homeTimeZone: string,
@@ -259,8 +295,9 @@ async function probe(
 ): Promise<{ channels: Channels; status: DeviceStatus }> {
   const chars = await conn.characteristics();
   const writable = new Set(chars.filter((c) => c.writable).map((c) => c.uuid));
+  // Only aer's own characteristics are ever probed; never the OTA or any other GATT char.
   for (const c of chars) {
-    if (!c.writable || c.uuid === current.reply || c.uuid === current.command) continue;
+    if (!c.writable || !PROBE_CHARS.includes(c.uuid) || c.uuid === current.command) continue;
     const candidate: Channels = {
       ...current,
       command: c.uuid,
@@ -277,6 +314,14 @@ async function probe(
   throw new DeviceError('noReply');
 }
 
+function assertValidZone(timeZone: string): void {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+  } catch {
+    throw new Error(`Invalid time zone: ${timeZone}`);
+  }
+}
+
 export async function openSession(
   t: BleTransport,
   deviceId: string,
@@ -284,20 +329,17 @@ export async function openSession(
   known: Channels | undefined,
   opts: SessionOptions = {},
 ): Promise<OpenedSession> {
+  assertValidZone(homeTimeZone);
   await checkAdapter(t);
   const now = opts.now ?? ((): Date => new Date());
   const conn = await connectWithRetries(t, deviceId, opts);
   let channels = known ?? DEFAULT_CHANNELS;
-  const session = new DispenserSession(conn, channels, opts);
+  let session: DispenserSession | null = null;
   try {
-    await session.start();
-    try {
-      await setClock(session, homeTimeZone, now);
-    } catch (e) {
-      // The wrong command characteristic looks like silence; the probe below sorts it out.
-      if (!isNoReply(e)) throw e;
-    }
+    session = await DispenserSession.attach(conn, channels, opts);
+    let clockSet = await trySetClock(session, homeTimeZone, now);
     let status: DeviceStatus;
+    let probed = false;
     try {
       status = await fetchStatus(session);
     } catch (e) {
@@ -305,12 +347,13 @@ export async function openSession(
       const found = await probe(session, conn, channels);
       channels = found.channels;
       status = found.status;
-      await setClock(session, homeTimeZone, now);
+      probed = true;
     }
-    return { session, channels, status };
+    if (probed || !clockSet) clockSet = await trySetClock(session, homeTimeZone, now);
+    return { session, channels, status, clockSet };
   } catch (e) {
-    await session.close();
-    if (e instanceof DeviceError && e.code !== 'disconnected') throw e;
-    throw new DeviceError(e instanceof DeviceError ? e.code : 'unreachable');
+    if (session) await session.close();
+    else await conn.disconnect().catch(() => undefined);
+    throw e instanceof DeviceError ? e : new DeviceError('unreachable');
   }
 }

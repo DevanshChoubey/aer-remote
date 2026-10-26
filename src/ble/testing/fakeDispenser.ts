@@ -32,6 +32,12 @@ export interface FakeDispenserOptions {
   lateReplyFromPrevious?: boolean;
   /** The nth write (counted per device, fires once) is applied, gets no reply, and the link drops. */
   disconnectAfter?: number;
+  /** Extra writable characteristics (e.g. an OTA char). Writes are recorded but never answered. */
+  extraWritable?: string[];
+  /** fetch-status replies omit bV, so they cannot be parsed. */
+  omitBv?: boolean;
+  /** The schedule characteristic (...0004) is not writable. */
+  scheduleReadOnly?: boolean;
 }
 
 export interface FakeDispenserState {
@@ -115,7 +121,9 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
       return [];
     case MT.fetchStatus:
       return [
-        ['bV', options.batteryMv ?? DEFAULT_BATTERY_MV],
+        ...(options.omitBv
+          ? []
+          : ([['bV', options.batteryMv ?? DEFAULT_BATTERY_MV]] as CborEntry[])),
         ['fV', FIRMWARE],
         ['cS', state.autoSpray ? AUTO_SPRAY_CODE[state.autoSpray] : NO_AUTO_SPRAY_CODE],
         ['sC', state.spraysSinceRefill],
@@ -198,14 +206,25 @@ function createConnection(id: string, device: Device): BleConnection {
         { uuid: replyChar, writable: false, notifiable: true },
         { uuid: charUuid('0002'), writable: true, notifiable: false },
         { uuid: charUuid('0003'), writable: true, notifiable: false },
-        { uuid: scheduleChar, writable: true, notifiable: false },
+        { uuid: scheduleChar, writable: !options.scheduleReadOnly, notifiable: false },
+        ...(options.extraWritable ?? []).map((uuid) => ({
+          uuid,
+          writable: true,
+          notifiable: false,
+        })),
       ];
     },
     async write(char, bytes): Promise<void> {
       if (!connected) throw new Error('Not connected');
       if (
         char === replyChar ||
-        ![commandChar, charUuid('0002'), charUuid('0003'), scheduleChar].includes(char)
+        ![
+          commandChar,
+          charUuid('0002'),
+          charUuid('0003'),
+          scheduleChar,
+          ...(options.extraWritable ?? []),
+        ].includes(char)
       )
         throw new Error('Characteristic is not writable');
       const prior = pending.get(char);

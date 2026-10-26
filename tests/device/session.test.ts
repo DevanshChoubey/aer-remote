@@ -4,6 +4,7 @@ import { DispenserSession, openSession, type SessionOptions } from '@/device/ses
 import { fetchStatusMsg, MT, sprayNowMsg } from '@/protocol/messages';
 import { charUuid, DEFAULT_CHANNELS } from '@/protocol/uuids';
 import type { BleConnection, BleTransport } from '@/ble/transport';
+import * as cbor from '@/protocol/cbor';
 import { encodeMap } from '@/protocol/cbor';
 
 const ID = 'dev1';
@@ -198,13 +199,11 @@ describe('DispenserSession.send', () => {
   });
 
   it('times out with noReply when replies are dropped', async () => {
-    const { session } = await open({}, { replyTimeoutMs: 3000 });
     jest.useFakeTimers();
     try {
       const t2 = setup({ dropReplies: true });
       const conn = await t2.connect(ID, 1000);
-      const s = new DispenserSession(conn, DEFAULT_CHANNELS, { replyTimeoutMs: 3000 });
-      await s.start();
+      const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS, { replyTimeoutMs: 3000 });
       const p = codeOf(s.send(fetchStatusMsg(100)));
       await jest.advanceTimersByTimeAsync(2999);
       let settled = false;
@@ -215,10 +214,11 @@ describe('DispenserSession.send', () => {
       expect(settled).toBe(false);
       await jest.advanceTimersByTimeAsync(1);
       expect(await p).toBe('noReply');
+      expect(s.connected).toBe(true);
+      await s.close();
     } finally {
       jest.useRealTimers();
     }
-    expect(session.connected).toBe(true);
   });
 
   it('never lets a late reply to a timed-out command satisfy a later one', async () => {
@@ -226,8 +226,7 @@ describe('DispenserSession.send', () => {
     try {
       const t = setup({ replyDelayMs: 100 });
       const conn = await t.connect(ID, 1000);
-      const s = new DispenserSession(conn, DEFAULT_CHANNELS, { replyTimeoutMs: 50 });
-      await s.start();
+      const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS, { replyTimeoutMs: 50 });
       const first = codeOf(s.send(fetchStatusMsg(100)));
       await jest.advanceTimersByTimeAsync(50);
       expect(await first).toBe('noReply');
@@ -239,6 +238,7 @@ describe('DispenserSession.send', () => {
       // first reply (mN 100) lands at t=100 while the second command waits
       await jest.advanceTimersByTimeAsync(60);
       expect(await outcome).toBe('noReply');
+      await s.close();
     } finally {
       jest.useRealTimers();
     }
@@ -272,29 +272,28 @@ describe('DispenserSession.send', () => {
 
     it('maps a non-200 ack to rejected', async () => {
       const { conn, emit } = scripted();
-      const s = new DispenserSession(conn, DEFAULT_CHANNELS);
-      await s.start();
+      const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS);
       const p = codeOf(s.send(fetchStatusMsg(100)));
       await Promise.resolve();
       emit(reply(MT.fetchStatus, 100, 500));
       expect(await p).toBe('rejected');
+      await s.close();
     });
 
     it('recovers after a corrupt frame', async () => {
       const { conn, emit } = scripted();
-      const s = new DispenserSession(conn, DEFAULT_CHANNELS);
-      await s.start();
+      const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS);
       emit(Uint8Array.from([0xff, 0xff, 0xff]));
       const p = s.send(fetchStatusMsg(100));
       await Promise.resolve();
       emit(reply(MT.fetchStatus, 100, 200));
       await expect(p).resolves.toMatchObject({ mN: 100 });
+      await s.close();
     });
 
     it('discards an oversized incomplete frame', async () => {
       const { conn, emit } = scripted();
-      const s = new DispenserSession(conn, DEFAULT_CHANNELS);
-      await s.start();
+      const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS);
       // byte string header claiming 60000 bytes, then more than the cap of payload
       emit(Uint8Array.from([0x59, 0xea, 0x60]));
       emit(new Uint8Array(2000));
@@ -302,6 +301,7 @@ describe('DispenserSession.send', () => {
       await Promise.resolve();
       emit(reply(MT.fetchStatus, 100, 200));
       await expect(p).resolves.toMatchObject({ mN: 100 });
+      await s.close();
     });
   });
 
@@ -350,5 +350,159 @@ describe('DispenserSession.send', () => {
     for (let i = 0; i < 160; i += 1) seen.push(session.nextMN());
     expect(Math.min(...seen)).toBe(100);
     expect(Math.max(...seen)).toBe(253);
+  });
+});
+
+describe('openSession hardening', () => {
+  const OTA = '00010203-0405-0607-0809-0a0b0c0d2b12';
+
+  it('never writes to the OTA or any non-aer characteristic while probing', async () => {
+    const t = setup({
+      commandChar: charUuid('0002'),
+      extraWritable: [OTA, 'dead0000-0000-0000-0000-000000000000'],
+    });
+    const { session } = await openSession(t, ID, 'UTC', undefined, { ...base, replyTimeoutMs: 20 });
+    const chars = new Set(t.state(ID).writes.map((w) => w.char));
+    expect([...chars].every((c) => [charUuid('0002'), charUuid('0003')].includes(c))).toBe(true);
+    await session.close();
+  });
+
+  it('does not probe an OTA-only device and fails with noReply', async () => {
+    const t = setup({ commandChar: OTA, extraWritable: [OTA], dropReplies: true });
+    expect(
+      await codeOf(openSession(t, ID, 'UTC', undefined, { ...base, replyTimeoutMs: 10 })),
+    ).toBe('noReply');
+    expect(t.state(ID).writes.some((w) => w.char === OTA)).toBe(false);
+  });
+
+  it('falls back to the found command char for schedules when 0004 is not writable', async () => {
+    const t = setup({ commandChar: charUuid('0002'), scheduleReadOnly: true });
+    const { channels, session } = await openSession(t, ID, 'UTC', undefined, {
+      ...base,
+      replyTimeoutMs: 20,
+    });
+    expect(channels.schedule).toBe(charUuid('0002'));
+    await session.close();
+  });
+
+  it('retries set-time once after status succeeds and reports clockSet', async () => {
+    const t = setup();
+    const { clockSet, session } = await openSession(t, ID, 'UTC', undefined, base);
+    expect(clockSet).toBe(true);
+    await session.close();
+  });
+
+  it('retries a failed set-time and still opens with clockSet false if it keeps failing', async () => {
+    jest.useFakeTimers();
+    try {
+      const real = setup();
+      // swallow set-time writes so they are never answered
+      const t: BleTransport = {
+        ...real,
+        async connect(id, ms) {
+          const c = await real.connect(id, ms);
+          return {
+            deviceId: c.deviceId,
+            characteristics: () => c.characteristics(),
+            write: (u, b) =>
+              b.length > 0 && Buffer.from(b).includes(Buffer.from([0x18, 102]))
+                ? Promise.resolve()
+                : c.write(u, b),
+            subscribe: (u, cb) => c.subscribe(u, cb),
+            onDisconnect: (cb) => c.onDisconnect(cb),
+            disconnect: () => c.disconnect(),
+          };
+        },
+      };
+      const p = openSession(t, ID, 'UTC', undefined, { ...base, replyTimeoutMs: 100 });
+      await jest.advanceTimersByTimeAsync(1000);
+      const { clockSet, status, session } = await p;
+      expect(clockSet).toBe(false);
+      expect(status.batteryMv).toBe(3000);
+      expect(real.state(ID).writes.map((w) => w.mT)).toEqual([107]);
+      await session.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('rejects an invalid time zone with a plain Error before touching the radio', async () => {
+    const t = setup();
+    const spy = jest.spyOn(t, 'connect');
+    const adapter = jest.spyOn(t, 'adapterState');
+    const p = openSession(t, ID, 'Not/AZone', undefined, base);
+    await expect(p).rejects.not.toBeInstanceOf(DeviceError);
+    await expect(p).rejects.toBeInstanceOf(Error);
+    expect(spy).not.toHaveBeenCalled();
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('turns an unparseable status into noReply', async () => {
+    const t = setup({ omitBv: true });
+    expect(
+      await codeOf(openSession(t, ID, 'UTC', undefined, { ...base, replyTimeoutMs: 10 })),
+    ).toBe('noReply');
+  });
+
+  it('maps a write failure to noReply', async () => {
+    const real = setup();
+    const conn = await real.connect(ID, 1000);
+    const failing: BleConnection = {
+      ...conn,
+      deviceId: ID,
+      characteristics: () => conn.characteristics(),
+      subscribe: (u, cb) => conn.subscribe(u, cb),
+      onDisconnect: (cb) => conn.onDisconnect(cb),
+      disconnect: () => conn.disconnect(),
+      write: async () => {
+        throw new Error('gatt');
+      },
+    };
+    const s = await DispenserSession.attach(failing, DEFAULT_CHANNELS);
+    expect(await codeOf(s.send(fetchStatusMsg(100)))).toBe('noReply');
+    await s.close();
+  });
+
+  it('stops notifying an unsubscribed disconnect callback', async () => {
+    const t = setup();
+    const { session } = await openSession(t, ID, 'UTC', undefined, base);
+    const cb = jest.fn();
+    session.onDisconnect(cb)();
+    t.disconnect(ID);
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('keeps notifying others when one disconnect callback throws', async () => {
+    const t = setup();
+    const { session } = await openSession(t, ID, 'UTC', undefined, base);
+    const ok = jest.fn();
+    session.onDisconnect(() => {
+      throw new Error('boom');
+    });
+    session.onDisconnect(ok);
+    t.disconnect(ID);
+    expect(ok).toHaveBeenCalledTimes(1);
+  });
+
+  it('never throws into the transport on a non-Cbor decode failure', async () => {
+    let emit: (b: Uint8Array) => void = () => undefined;
+    const conn: BleConnection = {
+      deviceId: ID,
+      characteristics: async () => [],
+      write: async () => undefined,
+      subscribe: async (_u, cb) => {
+        emit = cb;
+        return () => undefined;
+      },
+      onDisconnect: () => () => undefined,
+      disconnect: async () => undefined,
+    };
+    const s = await DispenserSession.attach(conn, DEFAULT_CHANNELS);
+    const spy = jest.spyOn(cbor, 'decodeFirst').mockImplementationOnce(() => {
+      throw new RangeError('weird');
+    });
+    expect(() => emit(Uint8Array.from([0xa1]))).not.toThrow();
+    spy.mockRestore();
+    await s.close();
   });
 });
