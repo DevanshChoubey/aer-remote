@@ -30,7 +30,7 @@ describe('status', () => {
   });
 
   it('maps auto-spray states', () => {
-    const f = (cS: number): unknown => parseStatus(reply({ cS })).autoSpray;
+    const f = (cS: number): unknown => parseStatus(reply({ bV: 2600, cS })).autoSpray;
     expect([111, 0, 112, 121, 131, 113, 122, 132, 114, 123, 133, 999].map(f)).toEqual([
       null,
       null,
@@ -48,15 +48,20 @@ describe('status', () => {
   });
 
   it('handles absent fields and map counters', () => {
-    expect(parseStatus(reply({}))).toEqual({
-      batteryMv: 0,
+    expect(parseStatus(reply({ bV: 2600 }))).toEqual({
+      batteryMv: 2600,
       firmware: '',
       autoSpray: null,
       spraysSinceRefill: 0,
     });
     expect(
-      parseStatus(reply({ sC: { sn: { a: 2, b: [3, 'x'] }, z: 'q' } })).spraysSinceRefill,
+      parseStatus(reply({ bV: 2600, sC: { sn: { a: 2, b: [3, 'x'] }, z: 'q' } })).spraysSinceRefill,
     ).toBe(5);
+  });
+
+  it('throws when bV is missing or not a number', () => {
+    expect(() => parseStatus(reply({}))).toThrow('status reply missing bV');
+    expect(() => parseStatus(reply({ bV: 'x' }))).toThrow('status reply missing bV');
   });
 
   it('computes battery and refill', () => {

@@ -34,8 +34,9 @@ function sumNumbers(v: CborValue | undefined): number {
 
 export function parseStatus(r: Reply): DeviceStatus {
   const { bV, fV, cS, sC } = r.body;
+  if (typeof bV !== 'number') throw new Error('status reply missing bV');
   return {
-    batteryMv: typeof bV === 'number' ? bV : 0,
+    batteryMv: bV,
     firmware: typeof fV === 'string' ? fV : '',
     autoSpray: typeof cS === 'number' ? (AUTO_SPRAY[cS] ?? null) : null,
     spraysSinceRefill: sumNumbers(sC),

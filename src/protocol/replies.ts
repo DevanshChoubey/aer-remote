@@ -31,7 +31,12 @@ export function parseSchedules(r: Reply): Schedule[] {
   const out: Schedule[] = [];
   for (const item of list) {
     const bytes = isMap(item) ? toBytes(item.s) : null;
-    if (bytes) out.push(decodeScheduleEntry(bytes));
+    if (!bytes) continue;
+    try {
+      out.push(decodeScheduleEntry(bytes));
+    } catch {
+      // Skip entries the device sent in a shape we do not understand.
+    }
   }
   return out;
 }

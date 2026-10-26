@@ -26,6 +26,17 @@ describe('replies', () => {
     expect(none && parseSchedules(none)).toEqual([]);
   });
 
+  it('skips malformed schedule entries', () => {
+    const r = toReply({
+      mT: 159,
+      mN: 1,
+      S: [{ s: [1, 2, 3] }, { s: [0x7c, 8, 0, 42, 20] }, { s: [0x7c, 8, 0, 42, 15] }],
+    });
+    const list = r ? parseSchedules(r) : [];
+    expect(list).toHaveLength(1);
+    expect(list[0]?.interval).toBe(20);
+  });
+
   it('exposes uuids', () => {
     expect(SERVICE_UUID).toBe('6e400000-b5a3-f393-e0a9-e50e24dcca9e');
     expect(charUuid('0003')).toBe('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
