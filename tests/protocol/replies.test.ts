@@ -26,9 +26,13 @@ describe('replies', () => {
     expect(none && parseSchedules(none)).toEqual([]);
   });
 
-  it('reads an empty or missing schedule list as no schedules', () => {
+  it('reads an empty, missing or null schedule list as no schedules', () => {
     const empty = toReply({ mT: 159, mN: 1, S: [] });
     expect(empty && parseSchedules(empty)).toEqual([]);
+    const missing = toReply({ mT: 159, mN: 1 });
+    expect(missing && parseSchedules(missing)).toEqual([]);
+    const nil = toReply({ mT: 159, mN: 1, S: null });
+    expect(nil && parseSchedules(nil)).toEqual([]);
   });
 
   it.each([

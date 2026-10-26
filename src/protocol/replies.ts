@@ -34,12 +34,12 @@ export class ReplyParseError extends Error {
 }
 
 /**
- * The schedules in a retrieve reply. A missing or empty `S` means none (a dispenser with no
+ * The schedules in a retrieve reply. A missing, null or empty `S` means none (a dispenser with no
  * schedules may omit it). Anything undecodable throws, so a list is never silently shortened.
  */
 export function parseSchedules(r: Reply): Schedule[] {
   const list = r.body.S;
-  if (list === undefined) return [];
+  if (list === undefined || list === null) return [];
   if (!Array.isArray(list)) throw new ReplyParseError('schedule list is not an array');
   return list.map((item, i) => {
     const bytes = isMap(item) ? toBytes(item.s) : null;
