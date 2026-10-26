@@ -120,9 +120,13 @@ schedules for offline display. Builder chooses storage.
 
 ### Visual design
 
-Modern, calm and friendly, with big touch targets. New palette, but the same token system as Home
-Inventory so it can change in one place. Exact look is proposed as a mockup during the plan's first
-UI task, and the author picks. _(Claude's call.)_
+Modern, calm and friendly, with big touch targets, on the same token system as Home Inventory so it
+can change in one place.
+
+- **Direction: "Warm & homely"** (chosen by the author from three directions, 2026-10-26). Home
+  Inventory's palette and fonts: cream, terracotta and saffron; Fraunces headings with Nunito body;
+  rounded, filled tiles. The two apps look like a family. Dark mode uses Home Inventory's dark tokens.
+- Reference mockup (option B): `docs/design/visual-directions-mockup.html`.
 
 ### Distribution
 
