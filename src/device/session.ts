@@ -1,0 +1,316 @@
+import type { BleConnection, BleTransport } from '@/ble/transport';
+import { CborError, decodeFirst } from '@/protocol/cbor';
+import { fetchStatusMsg, setTimeMsg, type OutgoingMessage } from '@/protocol/messages';
+import { toReply, type Reply } from '@/protocol/replies';
+import { parseStatus, type DeviceStatus } from '@/protocol/status';
+import { DEFAULT_CHANNELS, type Channels } from '@/protocol/uuids';
+
+import { DeviceError } from './errors';
+import { zoneInfo } from './time';
+
+export interface SessionOptions {
+  /** How long to wait for a matching reply. Default 3000. */
+  replyTimeoutMs?: number;
+  /** How long each connect attempt may take. Default 8000. */
+  connectTimeoutMs?: number;
+  /** Connect attempts before giving up. Default 3 (backoff 500ms, then 1500ms). */
+  connectAttempts?: number;
+  now?: () => Date;
+  mN?: () => number;
+}
+
+export interface OpenedSession {
+  session: DispenserSession;
+  channels: Channels;
+  status: DeviceStatus;
+}
+
+const DEFAULT_REPLY_TIMEOUT_MS = 3000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 8000;
+const DEFAULT_CONNECT_ATTEMPTS = 3;
+const BACKOFF_MS = [500, 1500];
+const REPLY_OFFSET = 50;
+const ACK_OK = 200;
+/** A reply frame is a few dozen bytes; anything larger without a complete item is garbage. */
+const MAX_REPLY_BUFFER = 1024;
+const MN_MIN = 100;
+const MN_MAX = 253;
+
+interface Pending {
+  mT: number;
+  mN: number;
+  resolve: (r: Reply) => void;
+  reject: (e: DeviceError) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const concat = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+};
+
+export class DispenserSession {
+  private channels: Channels;
+  private alive = true;
+  private pending: Pending | null = null;
+  private buffer: Uint8Array = new Uint8Array(0);
+  private tail: Promise<unknown> = Promise.resolve();
+  private counter = MN_MIN - 1;
+  private readonly disconnectCbs = new Set<() => void>();
+  private unsubscribe: (() => void) | null = null;
+  private offDisconnect: (() => void) | null = null;
+  private readonly replyTimeoutMs: number;
+
+  constructor(
+    private readonly conn: BleConnection,
+    channels: Channels,
+    private readonly opts: SessionOptions = {},
+  ) {
+    this.channels = channels;
+    this.replyTimeoutMs = opts.replyTimeoutMs ?? DEFAULT_REPLY_TIMEOUT_MS;
+  }
+
+  get connected(): boolean {
+    return this.alive;
+  }
+
+  /** Subscribe to replies and watch the link. Call once, right after construction. */
+  async start(): Promise<void> {
+    this.offDisconnect = this.conn.onDisconnect(() => this.handleDrop());
+    try {
+      this.unsubscribe = await this.conn.subscribe(this.channels.reply, (b) => this.onData(b));
+    } catch (e) {
+      this.offDisconnect();
+      this.offDisconnect = null;
+      throw e;
+    }
+  }
+
+  /** Next message number, cycling 100-253. */
+  nextMN(): number {
+    if (this.opts.mN) return this.opts.mN();
+    this.counter = this.counter >= MN_MAX ? MN_MIN : this.counter + 1;
+    return this.counter;
+  }
+
+  /** Switch which characteristics commands and schedules are written to. */
+  useChannels(channels: Channels): void {
+    this.channels = channels;
+  }
+
+  send(msg: OutgoingMessage): Promise<Reply> {
+    const run = this.tail.then(() => this.exchange(msg));
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
+  onDisconnect(cb: () => void): () => void {
+    this.disconnectCbs.add(cb);
+    return () => {
+      this.disconnectCbs.delete(cb);
+    };
+  }
+
+  /** Deliberate disconnect. Does not fire onDisconnect callbacks. Safe to call twice. */
+  async close(): Promise<void> {
+    if (!this.alive) return;
+    this.alive = false;
+    this.cleanup();
+    this.failPending(new DeviceError('disconnected'));
+    try {
+      await this.conn.disconnect();
+    } catch {
+      // Already gone; nothing to release.
+    }
+  }
+
+  private exchange(msg: OutgoingMessage): Promise<Reply> {
+    if (!this.alive) return Promise.reject(new DeviceError('disconnected'));
+    const char = msg.channel === 'schedule' ? this.channels.schedule : this.channels.command;
+    return new Promise<Reply>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.pending?.timer === timer) this.pending = null;
+        reject(new DeviceError('noReply'));
+      }, this.replyTimeoutMs);
+      this.pending = { mT: msg.mT, mN: msg.mN, resolve, reject, timer };
+      this.buffer = new Uint8Array(0);
+      this.conn.write(char, msg.bytes).catch(() => {
+        if (this.pending?.timer !== timer) return;
+        clearTimeout(timer);
+        this.pending = null;
+        reject(new DeviceError(this.alive ? 'noReply' : 'disconnected'));
+      });
+    });
+  }
+
+  private onData(chunk: Uint8Array): void {
+    let buf = concat(this.buffer, chunk);
+    for (;;) {
+      if (buf.length === 0) break;
+      let item: ReturnType<typeof decodeFirst>;
+      try {
+        item = decodeFirst(buf);
+      } catch (e) {
+        if (!(e instanceof CborError)) throw e;
+        buf = new Uint8Array(0);
+        break;
+      }
+      if (item === null) {
+        if (buf.length > MAX_REPLY_BUFFER) buf = new Uint8Array(0);
+        break;
+      }
+      buf = buf.slice(item.length);
+      const reply = toReply(item.value);
+      if (reply) this.deliver(reply);
+    }
+    this.buffer = buf;
+  }
+
+  private deliver(reply: Reply): void {
+    const p = this.pending;
+    if (!p || reply.mT !== p.mT + REPLY_OFFSET || reply.mN !== p.mN) return;
+    this.pending = null;
+    clearTimeout(p.timer);
+    if (reply.ack !== ACK_OK) p.reject(new DeviceError('rejected', `ack ${reply.ack}`));
+    else p.resolve(reply);
+  }
+
+  private failPending(e: DeviceError): void {
+    const p = this.pending;
+    if (!p) return;
+    this.pending = null;
+    clearTimeout(p.timer);
+    p.reject(e);
+  }
+
+  private cleanup(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.offDisconnect?.();
+    this.offDisconnect = null;
+  }
+
+  private handleDrop(): void {
+    if (!this.alive) return;
+    this.alive = false;
+    this.cleanup();
+    this.failPending(new DeviceError('disconnected'));
+    for (const cb of [...this.disconnectCbs]) cb();
+  }
+}
+
+async function checkAdapter(t: BleTransport): Promise<void> {
+  const state = await t.adapterState();
+  if (state === 'off' || state === 'unsupported') throw new DeviceError('bluetoothOff');
+  if (state === 'unauthorized') throw new DeviceError('permissionDenied');
+}
+
+async function connectWithRetries(
+  t: BleTransport,
+  deviceId: string,
+  opts: SessionOptions,
+): Promise<BleConnection> {
+  const attempts = opts.connectAttempts ?? DEFAULT_CONNECT_ATTEMPTS;
+  const timeout = opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await t.connect(deviceId, timeout);
+    } catch {
+      if (i < attempts - 1) await sleep(BACKOFF_MS[Math.min(i, BACKOFF_MS.length - 1)] ?? 0);
+    }
+  }
+  throw new DeviceError('unreachable');
+}
+
+async function fetchStatus(session: DispenserSession): Promise<DeviceStatus> {
+  const reply = await session.send(fetchStatusMsg(session.nextMN()));
+  try {
+    return parseStatus(reply);
+  } catch {
+    throw new DeviceError('noReply', 'unreadable status reply');
+  }
+}
+
+const isNoReply = (e: unknown): boolean => e instanceof DeviceError && e.code === 'noReply';
+
+async function setClock(
+  session: DispenserSession,
+  homeTimeZone: string,
+  now: () => Date,
+): Promise<void> {
+  const at = now();
+  const msg = setTimeMsg(
+    session.nextMN(),
+    Math.floor(at.getTime() / 1000),
+    zoneInfo(homeTimeZone, at),
+  );
+  await session.send(msg);
+}
+
+/** Try each other writable characteristic until one answers fetch-status. */
+async function probe(
+  session: DispenserSession,
+  conn: BleConnection,
+  current: Channels,
+): Promise<{ channels: Channels; status: DeviceStatus }> {
+  const chars = await conn.characteristics();
+  const writable = new Set(chars.filter((c) => c.writable).map((c) => c.uuid));
+  for (const c of chars) {
+    if (!c.writable || c.uuid === current.reply || c.uuid === current.command) continue;
+    const candidate: Channels = {
+      ...current,
+      command: c.uuid,
+      schedule: writable.has(current.schedule) ? current.schedule : c.uuid,
+    };
+    session.useChannels(candidate);
+    try {
+      return { channels: candidate, status: await fetchStatus(session) };
+    } catch (e) {
+      if (!isNoReply(e)) throw e;
+    }
+  }
+  session.useChannels(current);
+  throw new DeviceError('noReply');
+}
+
+export async function openSession(
+  t: BleTransport,
+  deviceId: string,
+  homeTimeZone: string,
+  known: Channels | undefined,
+  opts: SessionOptions = {},
+): Promise<OpenedSession> {
+  await checkAdapter(t);
+  const now = opts.now ?? ((): Date => new Date());
+  const conn = await connectWithRetries(t, deviceId, opts);
+  let channels = known ?? DEFAULT_CHANNELS;
+  const session = new DispenserSession(conn, channels, opts);
+  try {
+    await session.start();
+    try {
+      await setClock(session, homeTimeZone, now);
+    } catch (e) {
+      // The wrong command characteristic looks like silence; the probe below sorts it out.
+      if (!isNoReply(e)) throw e;
+    }
+    let status: DeviceStatus;
+    try {
+      status = await fetchStatus(session);
+    } catch (e) {
+      if (!isNoReply(e)) throw e;
+      const found = await probe(session, conn, channels);
+      channels = found.channels;
+      status = found.status;
+      await setClock(session, homeTimeZone, now);
+    }
+    return { session, channels, status };
+  } catch (e) {
+    await session.close();
+    if (e instanceof DeviceError && e.code !== 'disconnected') throw e;
+    throw new DeviceError(e instanceof DeviceError ? e.code : 'unreachable');
+  }
+}
