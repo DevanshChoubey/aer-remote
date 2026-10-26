@@ -1,5 +1,11 @@
 import { PermissionsAndroid, Platform } from 'react-native';
-import { BleManager, State, type Device, type Subscription } from 'react-native-ble-plx';
+import {
+  BleErrorCode,
+  BleManager,
+  State,
+  type Device,
+  type Subscription,
+} from 'react-native-ble-plx';
 
 import { SERVICE_UUID } from '@/protocol/uuids';
 
@@ -16,8 +22,9 @@ const DISCONNECT_TIMEOUT_MS = 3000;
 const ANDROID_MTU = 185;
 /** A monitor that fails right away (e.g. no CCCD) rejects subscribe(); later errors go to onError. */
 const SUBSCRIBE_SETTLE_MS = 250;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const STATE_SETTLE_MS = 2000;
+/** Bluetooth permissions are runtime permissions from Android 12 (API 31). Older: unsupported. */
+const ANDROID_MIN_API = 31;
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
@@ -36,26 +43,50 @@ export function mapState(state: State): AdapterState {
   }
 }
 
-async function androidPermissions(): Promise<boolean> {
-  const version =
-    typeof Platform.Version === 'number' ? Platform.Version : Number(Platform.Version);
-  if (version >= 31) {
-    const result = await PermissionsAndroid.requestMultiple([
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-    ]);
-    return (
-      result['android.permission.BLUETOOTH_SCAN'] === 'granted' &&
-      result['android.permission.BLUETOOTH_CONNECT'] === 'granted'
-    );
-  }
-  const result = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-  );
-  return result === 'granted';
+function androidApi(): number {
+  return typeof Platform.Version === 'number' ? Platform.Version : Number(Platform.Version);
 }
 
-function wrapDevice(manager: BleManager, device: Device): BleConnection {
+const BT_PERMISSIONS = [
+  PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+  PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+] as const;
+
+/** Whether the Bluetooth permissions are already granted. Never prompts. */
+async function androidPermissionsGranted(): Promise<boolean> {
+  if (androidApi() < ANDROID_MIN_API) return false;
+  const results = await Promise.all(BT_PERMISSIONS.map((p) => PermissionsAndroid.check(p)));
+  return results.every(Boolean);
+}
+
+/** Prompts for the Bluetooth permissions. Location is never requested (docs/ENGINEERING.md). */
+async function androidRequestPermissions(): Promise<boolean> {
+  if (androidApi() < ANDROID_MIN_API) return false;
+  const result = await PermissionsAndroid.requestMultiple([...BT_PERMISSIONS]);
+  return BT_PERMISSIONS.every((p) => result[p] === 'granted');
+}
+
+/** The adapter state once it has settled: Unknown and Resetting resolve shortly after start-up. */
+export async function settledState(manager: BleManager, timeoutMs: number): Promise<State> {
+  const first = await manager.state();
+  if (first !== State.Unknown && first !== State.Resetting) return first;
+  return new Promise<State>((resolve) => {
+    let sub: Subscription | null = null;
+    let last: State = first;
+    const finish = (state: State): void => {
+      clearTimeout(timer);
+      sub?.remove();
+      resolve(state);
+    };
+    const timer = setTimeout(() => finish(last), timeoutMs);
+    sub = manager.onStateChange((state) => {
+      last = state;
+      if (state !== State.Unknown && state !== State.Resetting) finish(state);
+    }, true);
+  });
+}
+
+export function wrapDevice(manager: BleManager, device: Device): BleConnection {
   const id = device.id;
   return {
     deviceId: id,
@@ -63,7 +94,8 @@ function wrapDevice(manager: BleManager, device: Device): BleConnection {
       const list = await device.characteristicsForService(SERVICE_UUID);
       return list.map((c) => ({
         uuid: c.uuid.toLowerCase(),
-        writable: c.isWritableWithoutResponse || c.isWritableWithResponse,
+        // Writes are always without response, so only that property counts.
+        writable: c.isWritableWithoutResponse,
         notifiable: c.isNotifiable || c.isIndicatable,
       }));
     },
@@ -77,8 +109,10 @@ function wrapDevice(manager: BleManager, device: Device): BleConnection {
     subscribe(charUuid, onData, onError): Promise<() => void> {
       return new Promise((resolve, reject) => {
         let settled = false;
+        let removed = false;
         let sub: Subscription | null = null;
         const remove = (): void => {
+          removed = true;
           sub?.remove();
           sub = null;
         };
@@ -88,6 +122,14 @@ function wrapDevice(manager: BleManager, device: Device): BleConnection {
         }, SUBSCRIBE_SETTLE_MS);
         sub = device.monitorCharacteristicForService(SERVICE_UUID, charUuid, (error, c) => {
           if (error) {
+            // Our own close, and link drops (reported through onDisconnect), are not errors.
+            if (
+              removed ||
+              error.errorCode === BleErrorCode.OperationCancelled ||
+              error.errorCode === BleErrorCode.DeviceDisconnected
+            ) {
+              return;
+            }
             if (!settled) {
               settled = true;
               clearTimeout(timer);
@@ -98,7 +140,7 @@ function wrapDevice(manager: BleManager, device: Device): BleConnection {
             }
             return;
           }
-          if (c?.value) onData(base64ToBytes(c.value));
+          if (!removed && c?.value) onData(base64ToBytes(c.value));
         });
       });
     },
@@ -121,24 +163,26 @@ function wrapDevice(manager: BleManager, device: Device): BleConnection {
   };
 }
 
-export function createRnTransport(): BleTransport {
+export function createRnTransport(
+  createManager: () => BleManager = () => new BleManager(),
+): BleTransport {
   let manager: BleManager | null = null;
   const mgr = (): BleManager => {
-    manager ??= new BleManager();
+    manager ??= createManager();
     return manager;
   };
 
   return {
     async adapterState(): Promise<AdapterState> {
-      if (Platform.OS === 'android' && !(await androidPermissions())) return 'unauthorized';
-      return mapState(await mgr().state());
+      if (Platform.OS === 'android' && !(await androidPermissionsGranted())) return 'unauthorized';
+      return mapState(await settledState(mgr(), STATE_SETTLE_MS));
     },
 
     requestPermissions(): Promise<boolean> {
-      return Platform.OS === 'android' ? androidPermissions() : Promise.resolve(true);
+      return Platform.OS === 'android' ? androidRequestPermissions() : Promise.resolve(true);
     },
 
-    scan(onFound, timeoutMs): { stop(): void; done: Promise<void> } {
+    scan(onFound, timeoutMs, opts): { stop(): void; done: Promise<void> } {
       const m = mgr();
       let finish: () => void = () => undefined;
       let fail: (e: Error) => void = () => undefined;
@@ -154,27 +198,32 @@ export function createRnTransport(): BleTransport {
         m.stopDeviceScan().then(finish, fail);
       };
       const timer = setTimeout(stop, timeoutMs);
-      m.startDeviceScan([SERVICE_UUID], { allowDuplicates: false }, async (error, device) => {
-        if (error) {
-          if (!stopped) {
-            stopped = true;
-            clearTimeout(timer);
-            m.stopDeviceScan().catch(() => undefined);
-            fail(toError(error));
+      m.startDeviceScan(
+        opts?.unfiltered ? null : [SERVICE_UUID],
+        { allowDuplicates: false },
+        async (error, device) => {
+          if (error) {
+            if (!stopped) {
+              stopped = true;
+              clearTimeout(timer);
+              m.stopDeviceScan().catch(() => undefined);
+              fail(toError(error));
+            }
+            return;
           }
-          return;
-        }
-        if (device && !stopped) {
-          const found: FoundDevice = {
-            id: device.id,
-            name: device.name ?? device.localName ?? null,
-            rssi: device.rssi,
-          };
-          onFound(found);
-        }
-      }).catch((e: unknown) => {
+          if (device && !stopped) {
+            const found: FoundDevice = {
+              id: device.id,
+              name: device.name ?? device.localName ?? null,
+              rssi: device.rssi,
+            };
+            onFound(found);
+          }
+        },
+      ).catch((e: unknown) => {
         stopped = true;
         clearTimeout(timer);
+        m.stopDeviceScan().catch(() => undefined);
         fail(toError(e));
       });
       return { stop, done };
@@ -183,26 +232,39 @@ export function createRnTransport(): BleTransport {
     async connect(deviceId, timeoutMs): Promise<BleConnection> {
       const m = mgr();
       let timedOut = false;
-      const attempt = m.connectToDevice(deviceId, { timeout: timeoutMs });
-      const timeout = sleep(timeoutMs).then(() => {
-        timedOut = true;
-        throw new Error('connect timed out');
-      });
-      // A late success after the timeout must not keep the dispenser's single connection slot.
-      attempt.then(
-        () => {
-          if (timedOut) m.cancelDeviceConnection(deviceId).catch(() => undefined);
-        },
-        () => undefined,
-      );
-      try {
-        const connected = await Promise.race([attempt, timeout]);
+      // The whole sequence (connect, discovery, MTU) shares one budget.
+      const sequence = (async (): Promise<Device> => {
+        const connected = await m.connectToDevice(deviceId, { timeout: timeoutMs });
+        // A late success after the timeout must not keep the dispenser's single connection slot.
+        if (timedOut) {
+          m.cancelDeviceConnection(deviceId).catch(() => undefined);
+          throw new Error('connect timed out');
+        }
         const ready = await connected.discoverAllServicesAndCharacteristics();
-        const device = Platform.OS === 'android' ? await ready.requestMTU(ANDROID_MTU) : ready;
+        if (Platform.OS !== 'android') return ready;
+        try {
+          return await ready.requestMTU(ANDROID_MTU);
+        } catch (e) {
+          console.warn('requestMTU failed; continuing with the default MTU', e);
+          return ready;
+        }
+      })();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error('connect timed out'));
+        }, timeoutMs);
+      });
+      sequence.catch(() => undefined);
+      try {
+        const device = await Promise.race([sequence, timeout]);
         return wrapDevice(m, device);
       } catch (e) {
         await m.cancelDeviceConnection(deviceId).catch(() => undefined);
         throw toError(e);
+      } finally {
+        clearTimeout(timer);
       }
     },
   };

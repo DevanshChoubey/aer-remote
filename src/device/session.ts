@@ -15,6 +15,8 @@ export interface SessionOptions {
   connectTimeoutMs?: number;
   /** Connect attempts before giving up. Default 3 (backoff 500ms, then 1500ms). */
   connectAttempts?: number;
+  /** Called when notifications on the reply channel fail after subscribing. Default: console.warn. */
+  onSubscribeError?: (e: Error) => void;
   now?: () => Date;
   mN?: () => number;
 }
@@ -95,7 +97,11 @@ export class DispenserSession {
   private async start(): Promise<void> {
     this.offDisconnect = this.conn.onDisconnect(() => this.handleDrop());
     try {
-      this.unsubscribe = await this.conn.subscribe(this.channels.reply, (b) => this.onData(b));
+      this.unsubscribe = await this.conn.subscribe(
+        this.channels.reply,
+        (b) => this.onData(b),
+        this.opts.onSubscribeError ?? ((e) => console.warn('reply notifications failed', e)),
+      );
     } catch (e) {
       this.cleanup();
       throw e;

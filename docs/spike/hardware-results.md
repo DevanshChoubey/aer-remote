@@ -5,6 +5,9 @@ first: the dispenser accepts one connection at a time.
 
 ## Phones
 
+Android 12 (API 31) is the supported floor: below it the app reports Bluetooth as unauthorized,
+because scanning there needs the location permission and the app never requests location.
+
 | Platform | Phone model | OS version | Build command                             | Date |
 | -------- | ----------- | ---------- | ----------------------------------------- | ---- |
 | Android  |             |            | `bunx expo run:android`                   |      |

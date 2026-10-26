@@ -1,5 +1,6 @@
 // Dev-only hardware spike (Task 7). Throwaway: plain React Native, no theme, no copy catalogue.
-import React, { useCallback, useState } from 'react';
+import { Redirect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { createRnTransport } from '@/ble/rnTransport';
@@ -34,15 +35,18 @@ const SCAN_MS = 8000;
 const CONNECT_MS = 8000;
 const PASS_BAR_MS = 5000;
 const REPEATS = 10;
+const GAP_MS = 1000;
 const HOME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 type Log = (line: string) => void;
 
 // Module-level on purpose: this throwaway screen has exactly one live link.
-const live: { session: DispenserSession | null; transport: BleTransport | null } = {
-  session: null,
-  transport: null,
-};
+const live: {
+  session: DispenserSession | null;
+  raw: BleTransport | null;
+  transport: BleTransport | null;
+  lastConnectError: string;
+} = { session: null, raw: null, transport: null, lastConnectError: '' };
 
 /** Wraps a transport so every write, notification and connect time lands in the log. */
 function loggingTransport(inner: BleTransport, log: Log): BleTransport {
@@ -57,7 +61,7 @@ function loggingTransport(inner: BleTransport, log: Log): BleTransport {
       log(`permissions: ${ok}`);
       return ok;
     },
-    scan: (onFound, ms) => inner.scan(onFound, ms),
+    scan: (onFound, ms, opts) => inner.scan(onFound, ms, opts),
     connect: async (id, ms) => {
       const t0 = Date.now();
       try {
@@ -65,7 +69,8 @@ function loggingTransport(inner: BleTransport, log: Log): BleTransport {
         log(`connect ok in ${Date.now() - t0} ms`);
         return logged(conn, log);
       } catch (e) {
-        log(`connect failed after ${Date.now() - t0} ms: ${String(e)}`);
+        live.lastConnectError = e instanceof Error ? e.message : String(e);
+        log(`connect failed after ${Date.now() - t0} ms: ${live.lastConnectError}`);
         throw e;
       }
     },
@@ -112,12 +117,23 @@ export default function Spike(): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    // A remount rebuilds the logging wrapper so it logs to the new screen state.
+    live.transport = null;
+    return () => {
+      void live.session?.close();
+      live.session = null;
+      live.transport = null;
+    };
+  }, []);
+
   const log = useCallback<Log>((line) => {
     setLines((prev) => [...prev.slice(-300), `${new Date().toISOString().slice(11, 23)} ${line}`]);
   }, []);
 
   const getTransport = useCallback((): BleTransport => {
-    live.transport ??= loggingTransport(createRnTransport(), log);
+    live.raw ??= createRnTransport();
+    live.transport ??= loggingTransport(live.raw, log);
     return live.transport;
   }, [log]);
 
@@ -146,14 +162,19 @@ export default function Spike(): React.JSX.Element {
     return reply;
   };
 
-  const scan = async (): Promise<void> => {
+  const scanWith = async (unfiltered: boolean): Promise<void> => {
     const t = getTransport();
+    await t.requestPermissions();
     if ((await t.adapterState()) !== 'on') throw new Error('bluetooth not ready');
     setFound([]);
-    const handle = t.scan((d) => {
-      setFound((prev) => (prev.some((p) => p.id === d.id) ? prev : [...prev, d]));
-      log(`found ${d.id} ${d.name ?? '-'} rssi ${d.rssi ?? '?'}`);
-    }, SCAN_MS);
+    const handle = t.scan(
+      (d) => {
+        setFound((prev) => (prev.some((p) => p.id === d.id) ? prev : [...prev, d]));
+        log(`found ${d.id} ${d.name ?? '-'} rssi ${d.rssi ?? '?'}`);
+      },
+      SCAN_MS,
+      { unfiltered },
+    );
     await handle.done;
     log('scan finished');
   };
@@ -162,6 +183,7 @@ export default function Spike(): React.JSX.Element {
     if (!selected) throw new Error('pick a device first');
     await live.session?.close();
     live.session = null;
+    await getTransport().requestPermissions();
     const t0 = Date.now();
     const opened = await openSession(getTransport(), selected, HOME_ZONE, undefined, {
       connectTimeoutMs: CONNECT_MS,
@@ -216,9 +238,11 @@ export default function Spike(): React.JSX.Element {
     if (!selected) throw new Error('pick a device first');
     await live.session?.close();
     live.session = null;
+    await getTransport().requestPermissions();
     const times: number[] = [];
     let pass = 0;
     for (let i = 1; i <= REPEATS; i++) {
+      live.lastConnectError = '';
       const t0 = Date.now();
       try {
         // One attempt per run so a flaky link counts as a failure, as the pass bar demands.
@@ -230,17 +254,22 @@ export default function Spike(): React.JSX.Element {
         await opened.session.close();
         times.push(ms);
         if (ms <= PASS_BAR_MS) pass++;
-        log(`run ${i}: ok ${ms} ms`);
+        log(`run ${i}: ${ms <= PASS_BAR_MS ? 'ok' : 'SLOW'} ${ms} ms`);
       } catch (e) {
-        log(`run ${i}: FAIL after ${Date.now() - t0} ms (${String(e)})`);
+        log(
+          `run ${i}: FAIL after ${Date.now() - t0} ms (${live.lastConnectError || String(e)}; ${String(e)})`,
+        );
       }
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, GAP_MS));
     }
-    log(`PASS BAR: ${pass}/${REPEATS} within ${PASS_BAR_MS} ms; times ${times.join(', ')} ms`);
+    log(
+      `PASS BAR: ${pass}/${REPEATS} within ${PASS_BAR_MS} ms (gap ${GAP_MS} ms between runs); times ${times.join(', ')} ms`,
+    );
   };
 
   const actions: [string, () => Promise<void>][] = [
-    ['Scan', scan],
+    ['Scan', () => scanWith(false)],
+    ['Scan (no filter)', () => scanWith(true)],
     ['Connect', connect],
     ['Fetch status', fetchStatus],
     ['Set time', setTime],
@@ -254,6 +283,8 @@ export default function Spike(): React.JSX.Element {
     ['Disconnect', disconnect],
     [`${REPEATS}x connect + status`, passBar],
   ];
+
+  if (!__DEV__) return <Redirect href="/" />;
 
   return (
     <View style={styles.root}>
