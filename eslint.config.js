@@ -181,7 +181,6 @@ module.exports = [
     files: ['tests/**'],
     rules: {
       'no-restricted-imports': 'off',
-      'no-restricted-globals': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
     },

@@ -64,4 +64,9 @@ describe('architecture lint rules', () => {
     );
     expect(errors).not.toContain('no-restricted-imports');
   });
+
+  it('bans fetch in tests too', () => {
+    const errors = errorsFor("export const r = fetch('x');\n", 'tests/x.test.ts');
+    expect(errors).toContain('no-restricted-globals');
+  });
 });

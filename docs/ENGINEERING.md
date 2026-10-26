@@ -104,4 +104,4 @@ lefthook `commit-msg` hook. `pre-commit` runs Prettier and ESLint on staged file
 
 ## Dependencies
 
-Task 1 edits `package.json`; later lanes do not.
+Adding a dependency needs a reason in the commit body. Prefer Expo-maintained packages.
