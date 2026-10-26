@@ -17,7 +17,12 @@ export interface BleConnection {
   characteristics(): Promise<BleCharacteristic[]>;
   /** Write without response. */
   write(charUuid: string, bytes: Uint8Array): Promise<void>;
-  subscribe(charUuid: string, onData: (b: Uint8Array) => void): Promise<() => void>;
+  /** onError receives monitor failures that happen after subscribing (e.g. a missing CCCD). */
+  subscribe(
+    charUuid: string,
+    onData: (b: Uint8Array) => void,
+    onError?: (e: Error) => void,
+  ): Promise<() => void>;
   onDisconnect(cb: () => void): () => void;
   disconnect(): Promise<void>;
 }

@@ -176,6 +176,11 @@ module.exports = [
       'import/no-default-export': 'off',
     },
   },
+  // Throwaway hardware spike: raw RN components and service modules are allowed here only.
+  {
+    files: ['app/dev/spike.tsx'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
   // Tests may use any import.
   {
     files: ['tests/**'],
