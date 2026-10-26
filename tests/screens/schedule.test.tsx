@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { createFakeTransport, type FakeTransport } from '@/ble/testing/fakeDispenser';
 import { ServicesProvider, type Services } from '@/core';
 import { DispenserClient } from '@/device/client';
+import { MT } from '@/protocol/messages';
 import type { Schedule } from '@/protocol/schedule';
 import { ScheduleEditor } from '@/screens/schedule/ScheduleEditor';
 import { problemCopy } from '@/screens/schedule/problemCopy';
@@ -37,11 +38,16 @@ async function mount(
     known?: boolean;
     busy?: boolean;
     replyDelayMs?: number;
+    ignoreScheduleWrites?: boolean;
     prep?: (store: Services['store']) => void;
   } = {},
 ): Promise<{ fake: FakeTransport; services: Services }> {
   const fake = createFakeTransport({
-    a: { busy: options.busy, replyDelayMs: options.replyDelayMs },
+    a: {
+      busy: options.busy,
+      replyDelayMs: options.replyDelayMs,
+      ignoreScheduleWrites: options.ignoreScheduleWrites,
+    },
   });
   const list = options.schedules ?? [];
   fake.state('a').schedules = list;
@@ -246,8 +252,76 @@ describe('ScheduleEditor', () => {
     await fireEvent.press(screen.getByLabelText(/^Start time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText('Save schedule'));
     await waitFor(() => expect(screen.queryByLabelText('Save schedule')).toBeTruthy());
-    await waitFor(() => expect(fake.state('a').schedules[0]?.start).toEqual({ h: 8, m: 5 }));
+    // The second save rounds 20:00 down to 19:45; wait for its notice so the save has finished.
+    expect(
+      await screen.findByText(
+        /^The dispenser rounded the end time to 7:45/i,
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy();
+    expect(fake.state('a').schedules[0]?.start).toEqual({ h: 8, m: 5 });
     expect(fake.state('a').schedules).toHaveLength(1);
+    await done(services);
+  });
+
+  it('matches the saved entry by its end time too, so a twin is not mistaken for it', async () => {
+    // The device already holds 08:00 to 10:00; the new entry has the same start, days and interval.
+    const twin: Schedule = { ...morning, days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] };
+    const { fake, services } = await mount({ schedules: [twin] });
+    await screen.findByLabelText('Save schedule');
+    // 08:00 to 12:10 every 20 minutes holds 12 sprays, which the device reads back as 12:00.
+    for (let i = 0; i < 8; i += 1)
+      await fireEvent.press(screen.getByLabelText(/^End time .*, hour down$/));
+    await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));
+    await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));
+    await fireEvent.press(screen.getByLabelText('Save schedule'));
+    expect(await screen.findByText('The dispenser rounded the end time to 12:00 pm.')).toBeTruthy();
+    // Saving again replaces the entry just saved, never the twin.
+    await fireEvent.press(screen.getByLabelText('10 min'));
+    await fireEvent.press(screen.getByLabelText('Save schedule'));
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+    expect(fake.state('a').schedules).toEqual([
+      twin,
+      { ...twin, end: { h: 12, m: 0 }, interval: 10 },
+    ]);
+    await done(services);
+  });
+
+  it('does not report a rounded end for an exact twin that differs only in end time', async () => {
+    const twin: Schedule = { ...morning, days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] };
+    const { fake, services } = await mount({ schedules: [twin] });
+    await screen.findByLabelText('Save schedule');
+    await fireEvent.press(screen.getByLabelText('Save schedule'));
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+    expect(screen.queryByText(/^The dispenser rounded the end time to/)).toBeNull();
+    expect(fake.state('a').schedules).toEqual([twin, { ...twin, end: { h: 20, m: 0 } }]);
+    await done(services);
+  });
+
+  it('shows a failure and stays open when the read-back lacks the saved entry', async () => {
+    const { services } = await mount({ ignoreScheduleWrites: true });
+    await fireEvent.press(await screen.findByLabelText('Save schedule'));
+    expect(
+      await screen.findByText("The dispenser didn't keep this schedule. Try saving again."),
+    ).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(screen.queryByText(/^The dispenser rounded the end time to/)).toBeNull();
+    await done(services);
+  });
+
+  it('deletes once when Delete is pressed twice quickly', async () => {
+    mockParams = { id: 'a', index: '0' };
+    const other: Schedule = { ...morning, days: ['mon'] };
+    const { fake, services } = await mount({ schedules: [morning, other], replyDelayMs: 10 });
+    const del = await screen.findByLabelText('Delete schedule');
+    await act(async () => {
+      fireEvent.press(del);
+      fireEvent.press(del);
+    });
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+    expect(fake.state('a').schedules).toEqual([other]);
+    expect(fake.state('a').writes.filter((w) => w.mT === MT.setSchedules)).toHaveLength(1);
     await done(services);
   });
 

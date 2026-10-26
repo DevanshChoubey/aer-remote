@@ -172,20 +172,25 @@ export function useScheduleDraft(id: string, index: number | undefined): Schedul
         at < 0 ? [...current, entry] : current.map((s, i) => (i === at ? entry : s)),
       );
       if (!readBack) return 'failed';
-      const stored =
-        readBack.find(
-          (s) =>
-            sameTime(s.start, entry.start) &&
-            s.interval === entry.interval &&
-            sortDays(s.days).join() === entry.days.join(),
-        ) ?? entry;
+      // The device stores a spray count, not an end, so it reads back start + count × interval.
+      const minutes = entry.start.h * 60 + entry.start.m + sprayCount(entry) * entry.interval;
+      const normalized: Schedule = {
+        ...entry,
+        end: { h: Math.floor(minutes / 60), m: minutes % 60 },
+      };
+      const stored = readBack.find((s) => sameSchedule(s, normalized));
+      if (!stored) {
+        if (alive.current) setErrorKey('schedule.notKept');
+        return 'failed';
+      }
+      const rounded = !sameTime(normalized.end, entry.end);
       if (alive.current) {
         // From now on this stored entry is the one being edited, so a second save replaces it.
         setOriginal(stored);
         setEdited(null);
-        setRoundedEnd(sameTime(stored.end, entry.end) ? null : stored.end);
+        setRoundedEnd(rounded ? stored.end : null);
       }
-      return sameTime(stored.end, entry.end) ? 'done' : 'rounded';
+      return rounded ? 'rounded' : 'done';
     } finally {
       inflight.current = false;
     }

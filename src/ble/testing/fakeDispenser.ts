@@ -38,6 +38,8 @@ export interface FakeDispenserOptions {
   omitBv?: boolean;
   /** The schedule characteristic (...0004) is not writable. */
   scheduleReadOnly?: boolean;
+  /** Set-schedules messages are acknowledged but not applied. */
+  ignoreScheduleWrites?: boolean;
 }
 
 export interface FakeDispenserState {
@@ -101,6 +103,7 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
       return [];
     }
     case MT.setSchedules: {
+      if (options.ignoreScheduleWrites) return [];
       const list = body.S;
       const next: Schedule[] = [];
       if (Array.isArray(list)) {
