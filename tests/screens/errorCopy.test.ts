@@ -14,6 +14,10 @@ describe('errorCopyKey', () => {
     expect(errorCopyKey(new DeviceError('permissionDenied'))).toBe('errors.permissionDenied');
     expect(errorCopyKey(new DeviceError('noReply'))).toBe('errors.noReply');
     expect(errorCopyKey(new DeviceError('disconnected'))).toBe('errors.disconnected');
+    expect(errorCopyKey(new DeviceError('timeZone'))).toBe('errors.timeZone');
+    expect(t('errors.timeZone')).toBe(
+      "This dispenser's time zone isn't valid. Pick it again in Settings.",
+    );
   });
 
   it('maps a battery rejection to the battery copy', () => {

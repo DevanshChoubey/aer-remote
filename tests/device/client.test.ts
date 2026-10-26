@@ -95,6 +95,35 @@ describe('scan permissions', () => {
     expect(found).toEqual([ID]);
   });
 
+  it.each([
+    ['off', 'bluetoothOff'],
+    ['unsupported', 'bluetoothOff'],
+    ['unauthorized', 'permissionDenied'],
+  ] as const)('rejects done with %s adapter as %s and never scans', async (state, code) => {
+    const t = createFakeTransport({ [ID]: {} }, { adapterState: state });
+    const scan = jest.spyOn(t, 'scan');
+    const client = new DispenserClient(t, createMemoryStore());
+    const handle = client.scan(() => undefined, 1000);
+    await expect(handle.done).rejects.toMatchObject({ name: 'DeviceError', code });
+    expect(scan).not.toHaveBeenCalled();
+  });
+
+  it('wraps a permission request failure as permissionDenied in scan and add', async () => {
+    const t = createFakeTransport({ [ID]: {} });
+    jest.spyOn(t, 'requestPermissions').mockRejectedValue(new Error('activity gone'));
+    const connect = jest.spyOn(t, 'connect');
+    const client = new DispenserClient(t, createMemoryStore());
+    await expect(client.scan(() => undefined, 1000).done).rejects.toMatchObject({
+      name: 'DeviceError',
+      code: 'permissionDenied',
+    });
+    await expect(client.add(ID, 'Hall', TZ)).rejects.toMatchObject({
+      name: 'DeviceError',
+      code: 'permissionDenied',
+    });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it('openSession through the client rejects when denied', async () => {
     const t = createFakeTransport({ [ID]: {} }, { permissionsGranted: false });
     const connect = jest.spyOn(t, 'connect');
@@ -594,7 +623,7 @@ describe('setHomeTimeZone', () => {
     await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: 'UTC' });
     await expect(r.client.setHomeTimeZone(ID, 'Not/AZone')).rejects.toMatchObject({
       name: 'DeviceError',
-      code: 'rejected',
+      code: 'timeZone',
     });
     expect((await r.store.get(ID))?.homeTimeZone).toBe('UTC');
   });

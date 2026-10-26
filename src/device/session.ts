@@ -230,9 +230,16 @@ export class DispenserSession {
   }
 }
 
-async function checkAdapter(t: BleTransport): Promise<void> {
+/** Asks for the Bluetooth permissions, then checks the radio; throws the matching DeviceError. */
+export async function checkAdapter(t: BleTransport): Promise<void> {
   // adapterState() never prompts, so ask here; the OS skips the dialog once granted.
-  if (!(await t.requestPermissions())) throw new DeviceError('permissionDenied');
+  let granted: boolean;
+  try {
+    granted = await t.requestPermissions();
+  } catch {
+    throw new DeviceError('permissionDenied', 'permission request failed');
+  }
+  if (!granted) throw new DeviceError('permissionDenied');
   const state = await t.adapterState();
   if (state === 'off' || state === 'unsupported') throw new DeviceError('bluetoothOff');
   if (state === 'unauthorized') throw new DeviceError('permissionDenied');
@@ -326,7 +333,7 @@ function assertValidZone(timeZone: string): void {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone });
   } catch {
-    throw new Error(`Invalid time zone: ${timeZone}`);
+    throw new DeviceError('timeZone', `invalid time zone: ${timeZone}`);
   }
 }
 

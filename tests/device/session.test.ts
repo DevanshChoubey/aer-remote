@@ -141,6 +141,16 @@ describe('openSession', () => {
     expect(adapter).not.toHaveBeenCalled();
   });
 
+  it('maps a failing permission request to permissionDenied without connecting', async () => {
+    const t = {
+      ...setup(),
+      requestPermissions: () => Promise.reject(new Error('no activity')),
+    } as BleTransport;
+    const connect = jest.spyOn(t, 'connect');
+    expect(await codeOf(openSession(t, ID, 'UTC', undefined, base))).toBe('permissionDenied');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['off', 'bluetoothOff'],
     ['unsupported', 'bluetoothOff'],
@@ -454,13 +464,13 @@ describe('openSession hardening', () => {
     }
   });
 
-  it('rejects an invalid time zone with a plain Error before touching the radio', async () => {
+  it('rejects an invalid time zone with a timeZone DeviceError before touching the radio', async () => {
     const t = setup();
     const spy = jest.spyOn(t, 'connect');
     const adapter = jest.spyOn(t, 'adapterState');
     const p = openSession(t, ID, 'Not/AZone', undefined, base);
-    await expect(p).rejects.not.toBeInstanceOf(DeviceError);
-    await expect(p).rejects.toBeInstanceOf(Error);
+    await expect(p).rejects.toBeInstanceOf(DeviceError);
+    await expect(p).rejects.toMatchObject({ code: 'timeZone' });
     expect(spy).not.toHaveBeenCalled();
     expect(adapter).not.toHaveBeenCalled();
   });

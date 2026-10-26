@@ -7,6 +7,7 @@ import {
   type Subscription,
 } from 'react-native-ble-plx';
 
+import { DeviceError } from '@/device/errors';
 import { SERVICE_UUID } from '@/protocol/uuids';
 
 import { base64ToBytes, bytesToBase64 } from './base64';
@@ -27,6 +28,17 @@ const STATE_SETTLE_MS = 2000;
 const ANDROID_MIN_API = 31;
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
+
+const errorCodeOf = (e: unknown): unknown =>
+  typeof e === 'object' && e !== null && 'errorCode' in e ? e.errorCode : undefined;
+
+/** A scan failure the user can fix becomes a DeviceError; anything else is passed on as it is. */
+export function scanError(e: unknown): Error {
+  const code = errorCodeOf(e);
+  if (code === BleErrorCode.BluetoothPoweredOff) return new DeviceError('bluetoothOff');
+  if (code === BleErrorCode.BluetoothUnauthorized) return new DeviceError('permissionDenied');
+  return toError(e);
+}
 
 export function mapState(state: State): AdapterState {
   switch (state) {
@@ -207,7 +219,7 @@ export function createRnTransport(
               stopped = true;
               clearTimeout(timer);
               m.stopDeviceScan().catch(() => undefined);
-              fail(toError(error));
+              fail(scanError(error));
             }
             return;
           }
@@ -224,7 +236,7 @@ export function createRnTransport(
         stopped = true;
         clearTimeout(timer);
         m.stopDeviceScan().catch(() => undefined);
-        fail(toError(e));
+        fail(scanError(e));
       });
       return { stop, done };
     },

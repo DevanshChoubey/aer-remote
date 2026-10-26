@@ -9,5 +9,6 @@ export default {
     'The dispenser refused that request. It may be busy or have its own limits. Wait a moment, then try again.',
   batteryTooLow: 'Battery too low to spray. Replace the batteries.',
   disconnected: 'The connection to the dispenser was lost. Try again.',
+  timeZone: "This dispenser's time zone isn't valid. Pick it again in Settings.",
   generic: 'Something went wrong. Please try again.',
 } as const;

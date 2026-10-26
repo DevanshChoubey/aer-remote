@@ -14,7 +14,13 @@ import {
   type Interval,
   type Schedule,
 } from '@/protocol/schedule';
-import type { BleCharacteristic, BleConnection, BleTransport, FoundDevice } from '@/ble/transport';
+import type {
+  AdapterState,
+  BleCharacteristic,
+  BleConnection,
+  BleTransport,
+  FoundDevice,
+} from '@/ble/transport';
 
 export interface FakeDispenserOptions {
   /** Characteristic that accepts command messages. Defaults to ...0003. */
@@ -283,7 +289,7 @@ function createConnection(id: string, device: Device): BleConnection {
 
 export function createFakeTransport(
   devices: Record<string, FakeDispenserOptions>,
-  transportOptions: { permissionsGranted?: boolean } = {},
+  transportOptions: { permissionsGranted?: boolean; adapterState?: AdapterState } = {},
 ): FakeTransport {
   const registry = new Map<string, Device>();
   for (const [id, options] of Object.entries(devices)) {
@@ -302,7 +308,7 @@ export function createFakeTransport(
 
   return {
     async adapterState() {
-      return 'on';
+      return transportOptions.adapterState ?? 'on';
     },
     async requestPermissions() {
       return transportOptions.permissionsGranted ?? true;

@@ -7,6 +7,7 @@ export const DEVICE_ERROR_CODES = [
   'rejected',
   'batteryTooLow',
   'disconnected',
+  'timeZone',
 ] as const;
 
 export type DeviceErrorCode = (typeof DEVICE_ERROR_CODES)[number];

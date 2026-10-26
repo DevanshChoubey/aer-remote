@@ -15,7 +15,7 @@ import { isBatteryTooLow, parseStatus, type DeviceStatus } from '@/protocol/stat
 import type { DispenserStore, SavedDispenser } from '@/store/types';
 
 import { DeviceError } from './errors';
-import { openSession, type DispenserSession, type SessionOptions } from './session';
+import { checkAdapter, openSession, type DispenserSession, type SessionOptions } from './session';
 
 export interface ClientOptions extends SessionOptions {
   /** Close the session this long after the last operation. Default 10000. */
@@ -56,15 +56,17 @@ export class DispenserClient {
     this.now = opts.now ?? ((): Date => new Date());
   }
 
-  /** Asks for permissions first; when denied, `done` rejects with permissionDenied and no scan starts. */
+  /**
+   * Asks for permissions and checks the radio first; when either fails, `done` rejects with
+   * permissionDenied or bluetoothOff and no scan starts.
+   */
   scan(
     onFound: (d: FoundDevice) => void,
     timeoutMs: number,
   ): { stop(): void; done: Promise<void> } {
     let inner: { stop(): void; done: Promise<void> } | null = null;
     let stopped = false;
-    const done = this.transport.requestPermissions().then(async (granted) => {
-      if (!granted) throw new DeviceError('permissionDenied');
+    const done = checkAdapter(this.transport).then(async () => {
       if (stopped) return;
       inner = this.transport.scan(onFound, timeoutMs);
       await inner.done;
@@ -180,13 +182,13 @@ export class DispenserClient {
 
   /**
    * Changes the zone used the next time the clock is set. Closes any live session so the next
-   * connect sends the new zone. Rejects with `rejected` for a zone the phone does not know.
+   * connect sends the new zone. Rejects with `timeZone` for a zone the phone does not know.
    */
   async setHomeTimeZone(id: string, zone: string): Promise<void> {
     try {
       new Intl.DateTimeFormat('en', { timeZone: zone });
     } catch {
-      throw new DeviceError('rejected', 'invalid time zone');
+      throw new DeviceError('timeZone', 'invalid time zone');
     }
     await this.run(id, async () => {
       await this.closeSession(id);

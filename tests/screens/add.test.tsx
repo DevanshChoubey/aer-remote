@@ -101,6 +101,18 @@ describe('AddScreen', () => {
     expect(screen.getByLabelText('Try again')).toBeTruthy();
   });
 
+  it('explains that Bluetooth is off', async () => {
+    const off = createFakeTransport({ d1: {} }, { adapterState: 'off' });
+    await mount(off);
+    expect(
+      await screen.findByText(
+        'Bluetooth is off. Turn it on in your phone settings, then try again.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Try again')).toBeTruthy();
+    expect(screen.queryByLabelText('Choose Dispenser 1')).toBeNull();
+  });
+
   it('shows an inline error when saving fails', async () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);

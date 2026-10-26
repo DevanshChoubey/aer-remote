@@ -1,6 +1,7 @@
 import { BleErrorCode, State, type BleManager, type Device } from 'react-native-ble-plx';
 
-import { mapState, settledState, wrapDevice } from '@/ble/rnTransport';
+import { createRnTransport, mapState, settledState, wrapDevice } from '@/ble/rnTransport';
+import { DeviceError } from '@/device/errors';
 
 describe('mapState', () => {
   it.each([
@@ -106,5 +107,39 @@ describe('wrapDevice subscribe', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('createRnTransport scan errors', () => {
+  type ScanListener = (e: Error | null, d: null) => void;
+  const scanWith = (errorCode: number): Promise<void> => {
+    let listener: ScanListener = () => undefined;
+    const manager = {
+      startDeviceScan: async (_u: unknown, _o: unknown, l: ScanListener) => {
+        listener = l;
+      },
+      stopDeviceScan: async () => undefined,
+    } as unknown as BleManager;
+    const handle = createRnTransport(() => manager).scan(() => undefined, 10000);
+    listener(Object.assign(new Error('native'), { errorCode }), null);
+    return handle.done;
+  };
+
+  it.each([
+    [BleErrorCode.BluetoothPoweredOff, 'bluetoothOff'],
+    [BleErrorCode.BluetoothUnauthorized, 'permissionDenied'],
+  ] as const)('maps BleErrorCode %s to %s', async (errorCode, code) => {
+    const done = scanWith(errorCode);
+    await expect(done).rejects.toBeInstanceOf(DeviceError);
+    await expect(done).rejects.toMatchObject({ code });
+  });
+
+  it('passes other scan errors through unchanged', async () => {
+    const done = scanWith(BleErrorCode.ScanStartFailed);
+    await expect(done).rejects.not.toBeInstanceOf(DeviceError);
+    await expect(done).rejects.toMatchObject({
+      message: 'native',
+      errorCode: BleErrorCode.ScanStartFailed,
+    });
   });
 });
