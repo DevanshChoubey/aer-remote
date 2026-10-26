@@ -17,6 +17,7 @@ export default {
   zoneTitle: 'Time zone for {name}',
   zoneSearch: 'Search time zones',
   zoneCurrent: 'Current: {zone}',
+  zoneCapped: 'Showing {count}. Search to find yours.',
   zoneNone: 'No matching time zone.',
   zoneHint: 'The dispenser clock is set to this zone each time the app connects.',
   licence: 'Licence',

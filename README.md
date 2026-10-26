@@ -13,7 +13,8 @@ time zones, the last status) stays on your phone.
 
 ## Build for Android (Linux)
 
-Needs Bun, JDK 17 and the Android SDK. Android 12 or newer.
+Bluetooth needs a real phone: emulators have none. You need Bun, the JDK (17), the Android SDK with
+`ANDROID_HOME` set, and an Android 12 or newer phone with USB debugging on, plugged in.
 
 ```sh
 bun install
@@ -22,17 +23,37 @@ bunx expo run:android
 
 ## Build for iOS (Mac)
 
-Bluetooth needs a development build, so Expo Go will not work.
+Bluetooth needs a real iPhone: the iOS simulator has none. It also needs a development build, so Expo
+Go will not work. You need Xcode, CocoaPods, and Developer Mode on the iPhone (Settings, Privacy &
+Security).
 
 ```sh
 git clone https://github.com/DevanshChoubey/aer-remote.git
 cd aer-remote
 bun install
-bunx expo run:ios
+bunx expo run:ios --device
 ```
 
-In Xcode, open the project under `ios/`, pick your team under Signing & Capabilities and sign in
-with a free Apple ID. Free signing expires after 7 days, so rebuild to renew it.
+Pick your phone when asked. If signing fails, open the `.xcworkspace` under `ios/` in Xcode, choose
+your team under Signing & Capabilities and sign in with a free Apple ID.
+
+## Everyday use
+
+A development build needs Metro running on your computer. For an app that works away from the
+computer, install a release build:
+
+```sh
+bunx expo run:android --variant release
+bunx expo run:ios --device --configuration Release
+```
+
+A build signed with a free Apple ID expires after 7 days. Rebuild then.
+
+## Development
+
+```sh
+bun run start   # or: bunx expo start --dev-client
+```
 
 ## Tests
 

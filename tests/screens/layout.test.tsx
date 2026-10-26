@@ -71,4 +71,26 @@ describe('AppProviders', () => {
     await fireEvent.press(screen.getByLabelText('pref dark'));
     expect(preferences.save).toHaveBeenCalledWith('light');
   });
+
+  it('falls back to the system theme when the saved preference never loads', async () => {
+    jest.useFakeTimers();
+    try {
+      const preferences = { load: () => new Promise<'dark'>(() => undefined), save: jest.fn() };
+      function Pref(): React.JSX.Element {
+        return <Txt>{`pref ${useThemePreference().preference}`}</Txt>;
+      }
+      await render(
+        <AppProviders services={services} preferences={preferences}>
+          <Pref />
+        </AppProviders>,
+      );
+      expect(screen.queryByText(/^pref/)).toBeNull();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1500);
+      });
+      expect(screen.getByText('pref system')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

@@ -52,3 +52,18 @@ export function filterZones(zones: string[], query: string): string[] {
   const q = query.trim().toLowerCase().replace(/\s+/g, '_');
   return q === '' ? zones : zones.filter((z) => z.toLowerCase().includes(q));
 }
+
+/** The zones with the given ones first (when they exist), then the rest in their order. */
+export function zonesFirst(zones: string[], first: string[]): string[] {
+  const head = first.filter((z, i) => z !== '' && first.indexOf(z) === i && zones.includes(z));
+  return [...head, ...zones.filter((z) => !head.includes(z))];
+}
+
+/** The phone's own zone, or '' when it cannot be read. */
+export function phoneZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return '';
+  }
+}

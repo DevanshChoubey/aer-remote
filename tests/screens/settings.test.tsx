@@ -4,7 +4,7 @@ import { createFakeTransport, type FakeTransport } from '@/ble/testing/fakeDispe
 import { ServicesProvider, type Services } from '@/core';
 import { DispenserClient } from '@/device/client';
 import { SettingsScreen } from '@/screens/settings/SettingsScreen';
-import { filterZones, listTimeZones } from '@/screens/settings/zones';
+import { filterZones, listTimeZones, zonesFirst } from '@/screens/settings/zones';
 import { createMemoryStore } from '@/store/memoryStore';
 import { ThemeProvider } from '@/theme';
 
@@ -83,6 +83,14 @@ describe('SettingsScreen', () => {
     });
   });
 
+  it('puts the current zone first and says when the list is capped', async () => {
+    await mount();
+    await fireEvent.press(await screen.findByLabelText('Kitchen, time zone UTC'));
+    expect(screen.getByText('Showing 50. Search to find yours.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Search time zones'), 'kolkata');
+    expect(screen.queryByText('Showing 50. Search to find yours.')).toBeNull();
+  });
+
   it('says so when no zone matches', async () => {
     await mount();
     await fireEvent.press(await screen.findByLabelText('Kitchen, time zone UTC'));
@@ -92,6 +100,10 @@ describe('SettingsScreen', () => {
 });
 
 describe('zones', () => {
+  it('orders the given zones first', () => {
+    expect(zonesFirst(['A', 'B', 'C'], ['C', '', 'X', 'C'])).toEqual(['C', 'A', 'B']);
+  });
+
   it('lists IANA zones including Asia/Kolkata', () => {
     expect(listTimeZones()).toContain('Asia/Kolkata');
   });

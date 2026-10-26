@@ -7,7 +7,7 @@ import { useThemePreference, type ThemePreference } from '@/theme';
 import { Button, Card, Chip, Column, Input, Row, Screen, Touchable, Txt } from '@/ui';
 
 import { useSettings } from './useSettings';
-import { filterZones, listTimeZones } from './zones';
+import { filterZones, listTimeZones, phoneZone, zonesFirst } from './zones';
 
 const THEMES: { value: ThemePreference; key: string }[] = [
   { value: 'system', key: 'settings.themeSystem' },
@@ -24,8 +24,10 @@ export function SettingsScreen(): ReactElement {
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const zones = useMemo(() => listTimeZones(), []);
-  const matches = useMemo(() => filterZones(zones, query).slice(0, MAX_SHOWN), [zones, query]);
   const picking = dispensers.find((d) => d.id === pickingId) ?? null;
+  const currentZone = picking?.homeTimeZone ?? '';
+  const found = filterZones(zonesFirst(zones, [currentZone, phoneZone()]), query);
+  const matches = found.slice(0, MAX_SHOWN);
 
   if (picking) {
     return (
@@ -51,6 +53,11 @@ export function SettingsScreen(): ReactElement {
             placeholder={t('settings.zoneSearch')}
           />
           {matches.length === 0 ? <Txt color="muted">{t('settings.zoneNone')}</Txt> : null}
+          {found.length > MAX_SHOWN ? (
+            <Txt variant="caption" color="muted">
+              {t('settings.zoneCapped', { count: MAX_SHOWN })}
+            </Txt>
+          ) : null}
           {matches.map((zone) => (
             <Touchable
               key={zone}
