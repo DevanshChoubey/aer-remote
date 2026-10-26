@@ -36,6 +36,8 @@ interface DeviceState {
   tail: Promise<unknown>;
   storeTail: Promise<unknown>;
   timer: ReturnType<typeof setTimeout> | null;
+  /** What a session opened for an unsaved device learned; add() saves it, nothing else does. */
+  unsaved?: { channels: SavedDispenser['channels']; clockSet: boolean; status: DeviceStatus };
 }
 
 export class DispenserClient {
@@ -79,7 +81,15 @@ export class DispenserClient {
   async add(id: string, name: string, homeTimeZone: string): Promise<SavedDispenser> {
     await this.run(id, async () => {
       const existing = await this.store.get(id);
-      await this.session(id, { ...existing, id, name, homeTimeZone });
+      const base = { ...existing, id, name, homeTimeZone };
+      await this.session(id, base);
+      const st = this.state(id);
+      if (st.unsaved) {
+        // The session was opened by blink() before the device was saved: save what it learned now.
+        const { channels, clockSet, status } = st.unsaved;
+        st.unsaved = undefined;
+        await this.upsertOpened(base, true, channels, clockSet, status);
+      }
       // A reused session skips the open-time save, so write the identity here.
       await this.patch(id, (d) => ({ ...d, name, homeTimeZone }));
     });
@@ -88,8 +98,13 @@ export class DispenserClient {
     return saved;
   }
 
-  blink(id: string): Promise<void> {
-    return this.withSession(id, async (s) => {
+  /**
+   * Blink the LED. For a device that is not saved yet, pass the time zone to open its session with;
+   * nothing is stored until add() runs, and the session closes on idle like any other.
+   */
+  blink(id: string, homeTimeZone?: string): Promise<void> {
+    return this.run(id, async () => {
+      const s = await this.session(id, undefined, homeTimeZone);
       await s.send(testLedMsg(s.nextMN()));
     });
   }
@@ -220,11 +235,21 @@ export class DispenserClient {
   }
 
   /** The live session for a device, opening one (and saving what it learns) if needed. */
-  private async session(id: string, base?: SavedDispenser): Promise<DispenserSession> {
+  private async session(
+    id: string,
+    base?: SavedDispenser,
+    unsavedZone?: string,
+  ): Promise<DispenserSession> {
     const st = this.state(id);
     if (st.session?.connected) return st.session;
     st.session = null;
-    const known = base ?? (await this.store.get(id));
+    st.unsaved = undefined;
+    let known = base ?? (await this.store.get(id));
+    let unsaved = false;
+    if (!known && unsavedZone !== undefined) {
+      known = { id, name: '', homeTimeZone: unsavedZone };
+      unsaved = true;
+    }
     if (!known) throw new DeviceError('unreachable', 'unknown dispenser');
     const opened = await openSession(
       this.transport,
@@ -238,6 +263,10 @@ export class DispenserClient {
     session.onDisconnect(() => {
       if (st.session === session) st.session = null;
     });
+    if (unsaved) {
+      st.unsaved = { channels: opened.channels, clockSet: opened.clockSet, status: opened.status };
+      return session;
+    }
     await this.upsertOpened(
       known,
       base !== undefined,
@@ -273,6 +302,7 @@ export class DispenserClient {
     st.timer = null;
     const session = st.session;
     st.session = null;
+    st.unsaved = undefined;
     await session?.close();
   }
 

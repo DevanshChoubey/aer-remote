@@ -73,12 +73,25 @@ describe('AddScreen', () => {
     ).toBeTruthy();
   });
 
+  it('blinks an unsaved dispenser against the fake without an error', async () => {
+    const fake = createFakeTransport({ d1: {} });
+    const services = await mount(fake);
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await waitFor(() => expect(fake.state('d1').ledBlinks).toBe(1));
+    expect(screen.queryByText(/Can't reach the dispenser/)).toBeNull();
+    expect(await services.store.list()).toEqual([]);
+    await fireEvent.press(screen.getByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Save dispenser'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
+    await services.client.remove('d1');
+  });
+
   it('blinks the chosen dispenser', async () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);
     const blink = jest.spyOn(services.client, 'blink').mockResolvedValue(undefined);
     await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
-    expect(blink).toHaveBeenCalledWith('d1');
+    expect(blink).toHaveBeenCalledWith('d1', Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 
   it('explains a denied permission and retries', async () => {
@@ -160,6 +173,6 @@ describe('AddScreen', () => {
     const services = await mount(fake);
     const blink = jest.spyOn(services.client, 'blink').mockResolvedValue(undefined);
     await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
-    expect(blink).toHaveBeenCalledWith('near');
+    expect(blink).toHaveBeenCalledWith('near', Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 });

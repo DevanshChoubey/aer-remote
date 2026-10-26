@@ -32,7 +32,7 @@ export function AddScreen(): ReactElement {
     setActionError(null);
     setBlinking(id);
     try {
-      await client.blink(id);
+      await client.blink(id, Intl.DateTimeFormat().resolvedOptions().timeZone);
     } catch (e) {
       setActionError(e);
     } finally {

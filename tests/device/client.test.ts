@@ -434,3 +434,40 @@ describe('fix round 1', () => {
     expect(devices.has(ID)).toBe(false);
   });
 });
+
+describe('blink before add', () => {
+  it('blinks an unsaved dispenser without writing to the store', async () => {
+    const r = rig();
+    await r.client.blink(ID, TZ);
+    expect(r.t.state(ID).ledBlinks).toBe(1);
+    expect(await r.store.list()).toEqual([]);
+  });
+
+  it('add right after blink reuses the session and saves the record', async () => {
+    const r = rig();
+    await r.client.blink(ID, TZ);
+    const saved = await r.client.add(ID, 'Hall', TZ);
+    expect(r.counts.connects).toBe(1);
+    expect(saved.name).toBe('Hall');
+    expect(saved.homeTimeZone).toBe(TZ);
+    expect(saved.channels).toBeDefined();
+    expect(saved.lastStatus?.batteryMv).toBe(3000);
+    expect(saved.clockSet).toBe(true);
+    expect(await r.store.list()).toHaveLength(1);
+  });
+
+  it('closes a blinked-but-never-added session on idle and stores nothing', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 10000 });
+    await r.client.blink(ID, TZ);
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(r.counts.disconnects).toBe(1);
+    expect(await r.store.list()).toEqual([]);
+    jest.useRealTimers();
+  });
+
+  it('still rejects an unknown dispenser when no time zone is given', async () => {
+    const r = rig();
+    expect(await codeOf(r.client.blink('nope'))).toBe('unreachable');
+  });
+});
