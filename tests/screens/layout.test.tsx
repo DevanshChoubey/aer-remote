@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { createFakeTransport } from '@/ble/testing/fakeDispenser';
 import { createServices, useServices } from '@/core';
@@ -91,6 +92,27 @@ describe('AppProviders', () => {
       expect(screen.getByText('pref system')).toBeTruthy();
     } finally {
       jest.useRealTimers();
+    }
+  });
+  it('closes every dispenser connection when the app goes to the background', async () => {
+    let handler: (s: AppStateStatus) => void = () => undefined;
+    const remove = jest.fn();
+    const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((type, cb) => {
+      if (type === 'change') handler = cb as (s: AppStateStatus) => void;
+      return { remove };
+    });
+    const closeAll = jest.spyOn(services.client, 'closeAll').mockResolvedValue(undefined);
+    try {
+      const { unmount } = await render(tree());
+      await act(async () => handler('inactive'));
+      expect(closeAll).not.toHaveBeenCalled();
+      await act(async () => handler('background'));
+      expect(closeAll).toHaveBeenCalledTimes(1);
+      await act(async () => unmount());
+      expect(remove).toHaveBeenCalled();
+    } finally {
+      listen.mockRestore();
+      closeAll.mockRestore();
     }
   });
 });

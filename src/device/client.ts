@@ -203,6 +203,25 @@ export class DispenserClient {
     if (st && st.inflight === 0) this.devices.delete(id);
   }
 
+  /**
+   * Closes every open session, each one queued behind its device's running operations, and clears
+   * the idle timers. Used when the app goes to the background so no dispenser stays held.
+   */
+  async closeAll(): Promise<void> {
+    const ids = [...this.devices.keys()];
+    await Promise.all(
+      ids.map(async (id) => {
+        const st = this.state(id);
+        if (st.timer) clearTimeout(st.timer);
+        st.timer = null;
+        await this.run(id, () => this.closeSession(id)).catch((e: unknown) =>
+          console.warn('Could not close a dispenser connection', e),
+        );
+        await this.forgetIfUnsaved(id, st).catch(() => undefined);
+      }),
+    );
+  }
+
   private state(id: string): DeviceState {
     let st = this.devices.get(id);
     if (!st) {

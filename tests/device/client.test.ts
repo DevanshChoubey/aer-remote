@@ -284,6 +284,41 @@ describe('session lifecycle', () => {
     expect(r.counts.connects).toBe(2);
   });
 
+  it('closeAll closes an open session at once and clears its idle timer', async () => {
+    jest.useFakeTimers();
+    const r = rig({}, { idleMs: 10000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    await r.client.blink(ID);
+    expect(r.counts.disconnects).toBe(0);
+    await r.client.closeAll();
+    expect(r.counts.disconnects).toBe(1);
+    expect(jest.getTimerCount()).toBe(0);
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(r.counts.disconnects).toBe(1);
+    await r.client.blink(ID);
+    expect(r.counts.connects).toBe(2);
+  });
+
+  it('closeAll waits for the running operation before closing', async () => {
+    jest.useFakeTimers();
+    const r = rig({ replyDelayMs: 50 }, { idleMs: 10000 });
+    await r.store.upsert({ id: ID, name: 'Hall', homeTimeZone: TZ });
+    const blink = r.client.blink(ID);
+    const closing = r.client.closeAll();
+    await jest.advanceTimersByTimeAsync(1000);
+    await expect(blink).resolves.toBeUndefined();
+    await closing;
+    expect(r.t.state(ID).ledBlinks).toBe(1);
+    expect(r.counts.disconnects).toBe(1);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('closeAll with nothing open does nothing', async () => {
+    const r = rig();
+    await expect(r.client.closeAll()).resolves.toBeUndefined();
+    expect(r.counts.disconnects).toBe(0);
+  });
+
   it('restarts the idle timer after each operation', async () => {
     jest.useFakeTimers();
     const r = rig({}, { idleMs: 10000 });
