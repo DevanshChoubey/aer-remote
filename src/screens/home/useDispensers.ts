@@ -1,21 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useServices, type SavedDispenser } from '@/core';
 
-export interface DispensersState {
+interface Loaded {
   dispensers: SavedDispenser[];
   loaded: boolean;
   failed: boolean;
 }
 
+export interface DispensersState extends Loaded {
+  /** Reads the list again, e.g. after a failed load. */
+  reload: () => void;
+}
+
 /** The saved dispensers, re-read whenever the store changes. Never touches Bluetooth. */
 export function useDispensers(): DispensersState {
   const { store } = useServices();
-  const [state, setState] = useState<DispensersState>({
+  const [state, setState] = useState<Loaded>({
     dispensers: [],
     loaded: false,
     failed: false,
   });
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback((): void => setAttempt((n) => n + 1), []);
   useEffect(() => {
     let alive = true;
     let latest = 0;
@@ -38,6 +45,6 @@ export function useDispensers(): DispensersState {
       alive = false;
       unsubscribe();
     };
-  }, [store]);
-  return state;
+  }, [store, attempt]);
+  return { ...state, reload };
 }

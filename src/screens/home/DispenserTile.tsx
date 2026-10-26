@@ -19,6 +19,7 @@ export interface DispenserTileProps {
 }
 
 const LOW_BATTERY_PERCENT = 20;
+const LOW_REFILL_PERCENT = 20;
 
 export function DispenserTile({ dispenser, now, onOpen }: DispenserTileProps): ReactElement {
   const { lastStatus, schedules } = dispenser;
@@ -50,7 +51,7 @@ export function DispenserTile({ dispenser, now, onOpen }: DispenserTileProps): R
       ? t('common.levelLabel', {
           name: t('common.refill'),
           percent: refill,
-          state: t(refill <= LOW_BATTERY_PERCENT ? 'common.levelLow' : 'common.levelOk'),
+          state: t(refill <= LOW_REFILL_PERCENT ? 'common.levelLow' : 'common.levelOk'),
         })
       : null,
     nextLine,

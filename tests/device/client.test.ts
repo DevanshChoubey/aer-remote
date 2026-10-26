@@ -470,4 +470,77 @@ describe('blink before add', () => {
     const r = rig();
     expect(await codeOf(r.client.blink('nope'))).toBe('unreachable');
   });
+
+  const tracked = (c: DispenserClient): number =>
+    (c as unknown as { devices: Map<string, unknown> }).devices.size;
+
+  it('forgets a blinked unsaved device once it closes on idle', async () => {
+    jest.useFakeTimers();
+    try {
+      const r = rig({}, { idleMs: 10000 });
+      await r.client.blink(ID, TZ);
+      expect(tracked(r.client)).toBe(1);
+      await jest.advanceTimersByTimeAsync(10000);
+      expect(r.counts.disconnects).toBe(1);
+      expect(tracked(r.client)).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps tracking a saved device after idle close', async () => {
+    jest.useFakeTimers();
+    try {
+      const r = rig({}, { idleMs: 10000 });
+      await r.client.add(ID, 'Hall', TZ);
+      await jest.advanceTimersByTimeAsync(10000);
+      expect(tracked(r.client)).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('add after the blink session idled out opens fresh and stores the record', async () => {
+    jest.useFakeTimers();
+    try {
+      const r = rig({}, { idleMs: 10000 });
+      await r.client.blink(ID, TZ);
+      await jest.advanceTimersByTimeAsync(10000);
+      const saved = await r.client.add(ID, 'Hall', TZ);
+      expect(r.counts.connects).toBe(2);
+      expect(saved.name).toBe('Hall');
+      expect(await r.store.list()).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('blink d1 then add d2 closes d1 on idle and stores nothing for it', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = createFakeTransport({ d1: {}, d2: {} });
+      const store = createMemoryStore();
+      const client = new DispenserClient(t, store, { now: () => NOW, idleMs: 10000 });
+      await client.blink('d1', TZ);
+      await client.add('d2', 'Two', TZ);
+      await jest.advanceTimersByTimeAsync(10000);
+      expect((await store.list()).map((d) => d.id)).toEqual(['d2']);
+      expect(t.state('d1').ledBlinks).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('rename and remove on a blinked unsaved id write nothing and do not throw', async () => {
+    const r = rig();
+    const upsert = jest.spyOn(r.store, 'upsert');
+    const remove = jest.spyOn(r.store, 'remove');
+    await r.client.blink(ID, TZ);
+    await expect(r.client.rename(ID, 'X')).resolves.toBeUndefined();
+    await expect(r.client.remove(ID)).resolves.toBeUndefined();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(r.counts.disconnects).toBe(1);
+    expect(await r.store.list()).toEqual([]);
+  });
 });

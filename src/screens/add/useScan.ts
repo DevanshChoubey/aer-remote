@@ -6,12 +6,14 @@ export interface FoundDispenser {
   id: string;
   name: string | null;
   rssi: number | null;
+  /** 1-based label number, fixed when the device is first seen. */
+  n: number;
 }
 
 export type ScanStatus = 'scanning' | 'done' | 'error';
 
 export interface ScanState {
-  /** Unsaved dispensers in range, strongest signal first. */
+  /** Unsaved dispensers in range, in the order they were first found. */
   devices: FoundDispenser[];
   status: ScanStatus;
   error: unknown;
@@ -23,8 +25,6 @@ export interface ScanState {
 
 export const SCAN_MS = 15000;
 
-const strength = (d: FoundDispenser): number => d.rssi ?? Number.NEGATIVE_INFINITY;
-
 /** Scans for dispensers that are not saved yet; starts on mount, stops on unmount. */
 export function useScan(): ScanState {
   const { client, store } = useServices();
@@ -34,16 +34,24 @@ export function useScan(): ScanState {
   const [waited, setWaited] = useState(false);
   const active = useRef<{ stop(): void } | null>(null);
   const run = useRef(0);
+  const labels = useRef(new Map<string, number>());
 
-  const stop = useCallback((): void => {
+  /** Ends the running scan without touching state (safe in cleanup). */
+  const halt = useCallback((): void => {
     run.current += 1;
     active.current?.stop();
     active.current = null;
   }, []);
 
+  /** Stops scanning and keeps the list on screen. */
+  const stop = useCallback((): void => {
+    halt();
+    setStatus((s) => (s === 'scanning' ? 'done' : s));
+  }, [halt]);
+
   /** Starts a scan; state is already in its "scanning, nothing found" shape. */
   const begin = useCallback((): void => {
-    stop();
+    halt();
     const mine = run.current;
     const current = (): boolean => run.current === mine;
     store
@@ -53,10 +61,16 @@ export function useScan(): ScanState {
         const known = new Set(saved.map((d) => d.id));
         const handle = client.scan((found) => {
           if (!current() || known.has(found.id)) return;
+          let n = labels.current.get(found.id);
+          if (n === undefined) {
+            n = labels.current.size + 1;
+            labels.current.set(found.id, n);
+          }
+          const seen: FoundDispenser = { ...found, n };
           setDevices((list) =>
-            [...list.filter((d) => d.id !== found.id), found].sort(
-              (a, b) => strength(b) - strength(a),
-            ),
+            list.some((d) => d.id === found.id)
+              ? list.map((d) => (d.id === found.id ? seen : d))
+              : [...list, seen],
           );
         }, SCAN_MS);
         active.current = handle;
@@ -69,7 +83,7 @@ export function useScan(): ScanState {
         setError(e);
         setStatus('error');
       });
-  }, [client, store, stop]);
+  }, [client, store, halt]);
 
   const start = useCallback((): void => {
     setDevices([]);
@@ -81,8 +95,8 @@ export function useScan(): ScanState {
 
   useEffect(() => {
     begin();
-    return stop;
-  }, [begin, stop]);
+    return halt;
+  }, [begin, halt]);
 
   useEffect(() => {
     if (status !== 'scanning') return undefined;

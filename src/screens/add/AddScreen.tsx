@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState, type ReactElement } from 'react';
+import { useRef, useState, type ReactElement } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 
 import { useServices } from '@/core';
@@ -26,9 +26,11 @@ export function AddScreen(): ReactElement {
   const [name, setName] = useState(t('add.defaultName'));
   const [blinking, setBlinking] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [actionError, setActionError] = useState<unknown>(null);
 
   const blink = async (id: string): Promise<void> => {
+    scan.stop();
     setActionError(null);
     setBlinking(id);
     try {
@@ -47,6 +49,8 @@ export function AddScreen(): ReactElement {
   };
 
   const save = async (d: FoundDispenser): Promise<void> => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setActionError(null);
     setSaving(true);
     try {
@@ -55,6 +59,7 @@ export function AddScreen(): ReactElement {
       router.replace(`/dispenser/${saved.id}`);
     } catch (e) {
       setActionError(e);
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -113,8 +118,8 @@ export function AddScreen(): ReactElement {
         <Column gap={3}>
           <Txt variant="heading">{t('add.found')}</Txt>
           <Txt color="muted">{t('add.blinkHint')}</Txt>
-          {scan.devices.map((d, i) => {
-            const label = t('add.deviceName', { n: i + 1 });
+          {scan.devices.map((d) => {
+            const label = t('add.deviceName', { n: d.n });
             return (
               <Card key={d.id}>
                 <Txt variant="bodyBold">{label}</Txt>

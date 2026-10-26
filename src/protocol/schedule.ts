@@ -85,13 +85,21 @@ export function nextSprayToday(
   now: Date,
   timeZone: string,
 ): TimeOfDay | null {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hourCycle: 'h23',
-    hour: 'numeric',
-    minute: 'numeric',
-  }).formatToParts(now);
+  // Once a year the spring-forward gap or the repeated fall-back hour may show a time that does not
+  // exist or appears twice; that is acceptable here.
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      hourCycle: 'h23',
+      hour: 'numeric',
+      minute: 'numeric',
+    }).formatToParts(now);
+  } catch (e) {
+    if (e instanceof RangeError) return null; // unknown time zone
+    throw e;
+  }
   const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
   const today = WEEKDAY_BY_SHORT[part('weekday')];
   if (!today) return null;

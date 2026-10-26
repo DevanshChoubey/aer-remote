@@ -129,4 +129,8 @@ describe('nextSprayToday', () => {
     const bad: Schedule = { ...morning, end: { h: 7, m: 0 } };
     expect(nextSprayToday([bad], at('2026-10-26T01:00:00Z'), 'Asia/Kolkata')).toBeNull();
   });
+
+  it('returns null for an unknown time zone', () => {
+    expect(nextSprayToday([morning], at('2026-10-26T02:10:00Z'), 'Not/AZone')).toBeNull();
+  });
 });

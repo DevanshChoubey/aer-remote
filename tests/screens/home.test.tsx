@@ -12,7 +12,10 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
+}));
 
 const NOW = '2026-10-26T10:00:00.000Z';
 
@@ -122,12 +125,15 @@ describe('HomeScreen', () => {
   });
 
   it('never connects on its own', async () => {
-    const services = rig();
-    const spy = jest.spyOn(services.client, 'refresh');
+    const fake = createFakeTransport({ a: {} });
+    const connect = jest.spyOn(fake, 'connect');
+    const scan = jest.spyOn(fake, 'scan');
+    const services = createServices({ transport: fake, store: createMemoryStore() });
     await services.store.upsert(kitchen);
     await renderHome(services);
     await screen.findByText('Kitchen');
-    expect(spy).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    expect(scan).not.toHaveBeenCalled();
   });
 
   it('re-reads when the store changes', async () => {
@@ -148,5 +154,45 @@ describe('HomeScreen', () => {
     await renderHome(rig());
     await fireEvent.press(await screen.findByLabelText('Bluetooth test'));
     expect(mockPush).toHaveBeenCalledWith('/dev/spike');
+  });
+
+  it('shows Try again and the Add button when loading fails, and reloads', async () => {
+    const services = rig();
+    jest.spyOn(services.store, 'list').mockRejectedValueOnce(new Error('disk'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await renderHome(services);
+    expect(await screen.findByText('Could not load your dispensers.')).toBeTruthy();
+    expect(screen.getByLabelText('Add dispenser')).toBeTruthy();
+    await services.store.upsert(kitchen);
+    await fireEvent.press(screen.getByLabelText('Try again'));
+    expect(await screen.findByText('Kitchen')).toBeTruthy();
+    expect(screen.queryByText('Could not load your dispensers.')).toBeNull();
+  });
+
+  it('survives a dispenser with a bad time zone', async () => {
+    const services = rig();
+    await services.store.upsert({ ...kitchen, homeTimeZone: 'Not/AZone' });
+    await renderHome(services);
+    expect(await screen.findByText('Kitchen')).toBeTruthy();
+    expect(screen.getByText('No schedule today')).toBeTruthy();
+  });
+
+  it('refreshes the last-checked time every minute and stops on unmount', async () => {
+    jest.useFakeTimers({ now: new Date(NOW) });
+    try {
+      const services = rig();
+      await services.store.upsert(kitchen);
+      const clear = jest.spyOn(globalThis, 'clearInterval');
+      await renderHome(services);
+      expect(await screen.findByText('Last checked just now')).toBeTruthy();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5 * 60_000);
+      });
+      expect(screen.getByText('Last checked 5 min ago')).toBeTruthy();
+      await screen.unmount();
+      expect(clear).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

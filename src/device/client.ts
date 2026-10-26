@@ -226,8 +226,19 @@ export class DispenserClient {
       st.timer = null;
       if (st.inflight !== 0) return;
       // Queue the close behind the device's operations so a new connect cannot overlap it.
-      st.tail = st.tail.then(() => this.closeSession(id)).catch(() => undefined);
+      st.tail = st.tail
+        .then(() => this.closeSession(id))
+        .then(() => this.forgetIfUnsaved(id, st))
+        .catch(() => undefined);
     }, this.idleMs);
+  }
+
+  /** Drops the bookkeeping of a device that was only blinked and never saved. */
+  private async forgetIfUnsaved(id: string, st: DeviceState): Promise<void> {
+    if (st.inflight !== 0 || st.session || this.devices.get(id) !== st) return;
+    if ((await this.store.get(id)) === null && st.inflight === 0 && !st.session) {
+      this.devices.delete(id);
+    }
   }
 
   private withSession<T>(id: string, op: (s: DispenserSession) => Promise<T>): Promise<T> {

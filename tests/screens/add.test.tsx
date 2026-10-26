@@ -160,19 +160,93 @@ describe('AddScreen', () => {
     await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
     expect(stop).toHaveBeenCalledTimes(1);
     await view.unmount();
-    expect(stop.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it('sorts the strongest signal first', async () => {
+  it('stops the scan once on unmount and ignores devices found afterwards', async () => {
+    const stop = jest.fn();
+    let report: (d: { id: string; name: string | null; rssi: number | null }) => void = () =>
+      undefined;
     const fake = createFakeTransport({});
     jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
-      onFound({ id: 'far', name: 'aer', rssi: -90 });
-      onFound({ id: 'near', name: 'aer', rssi: -40 });
-      return { stop: () => undefined, done: Promise.resolve() };
+      report = onFound;
+      return { stop, done: new Promise(() => undefined) };
+    });
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const services = createServices({ transport: fake, store: createMemoryStore() });
+    const view = await render(
+      <ServicesProvider services={services}>
+        <ThemeProvider scheme="light">
+          <AddScreen />
+        </ThemeProvider>
+      </ServicesProvider>,
+    );
+    await waitFor(() => expect(report).not.toBe(undefined));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await view.unmount();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(() => report({ id: 'late', name: 'aer', rssi: -40 })).not.toThrow();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('runs Save only once when submitted twice', async () => {
+    const fake = createFakeTransport({ d1: {} });
+    const services = await mount(fake);
+    const add = jest
+      .spyOn(services.client, 'add')
+      .mockImplementation(() => new Promise(() => undefined));
+    await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
+    const name = await screen.findByLabelText('Name');
+    await fireEvent(name, 'submitEditing');
+    await fireEvent(name, 'submitEditing');
+    await fireEvent.press(screen.getByLabelText('Save dispenser'));
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the scan before blinking and keeps the list; Look again restarts', async () => {
+    const stop = jest.fn();
+    const fake = createFakeTransport({});
+    const scan = jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
+      onFound({ id: 'd1', name: 'aer', rssi: -50 });
+      return { stop, done: new Promise(() => undefined) };
+    });
+    const services = await mount(fake);
+    const order: string[] = [];
+    stop.mockImplementation(() => order.push('stop'));
+    jest.spyOn(services.client, 'blink').mockImplementation(async () => {
+      order.push('blink');
+    });
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await waitFor(() => expect(order).toEqual(['stop', 'blink']));
+    expect(screen.getByLabelText('Choose Dispenser 1')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Look again'));
+    expect(scan).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps first-found order and labels when a device is reported again', async () => {
+    const fake = createFakeTransport({});
+    let report: (d: { id: string; name: string | null; rssi: number | null }) => void = () =>
+      undefined;
+    jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
+      report = onFound;
+      onFound({ id: 'first', name: 'aer', rssi: -80 });
+      onFound({ id: 'second', name: 'aer', rssi: -70 });
+      return { stop: () => undefined, done: new Promise(() => undefined) };
     });
     const services = await mount(fake);
     const blink = jest.spyOn(services.client, 'blink').mockResolvedValue(undefined);
-    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
-    expect(blink).toHaveBeenCalledWith('near', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    await screen.findByLabelText('Blink the light on Dispenser 2');
+    await act(async () => {
+      report({ id: 'second', name: 'aer', rssi: -30 });
+    });
+    const labels = screen
+      .getAllByLabelText(/^Blink the light on/)
+      .map((e) => e.props.accessibilityLabel);
+    expect(labels).toEqual(['Blink the light on Dispenser 1', 'Blink the light on Dispenser 2']);
+    await fireEvent.press(screen.getByLabelText('Blink the light on Dispenser 2'));
+    expect(blink.mock.calls[0]?.[0]).toBe('second');
   });
 });
