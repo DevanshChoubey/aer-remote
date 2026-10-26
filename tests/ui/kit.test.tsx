@@ -38,6 +38,14 @@ describe('ui kit', () => {
     expect(onToggle).toHaveBeenCalled();
   });
 
+  it('Chip can be disabled: no press, and the state says so', async () => {
+    const onToggle = jest.fn();
+    await render(wrap(<Chip label="Wed" state="neutral" onToggle={onToggle} disabled />));
+    await fireEvent.press(screen.getByLabelText('Wed'));
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Wed').props.accessibilityState.disabled).toBe(true);
+  });
+
   it('Chip without onToggle still exposes selected', async () => {
     await render(wrap(<Chip label="Tue" state="neutral" />));
     expect(screen.getByLabelText('Tue').props.accessibilityState.selected).toBe(false);

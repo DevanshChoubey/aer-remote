@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   MAX_SCHEDULES,
@@ -45,7 +45,7 @@ export interface ScheduleDraft {
   missing: boolean;
   /** True while the device's schedule list has never been read, so saving could erase unknowns. */
   unknown: boolean;
-  /** Editing an index that is not on the device list (stale link). */
+  /** Editing an index that is not on the device list. */
   stale: boolean;
   isNew: boolean;
   draft: Schedule;
@@ -53,6 +53,8 @@ export interface ScheduleDraft {
   sprays: number;
   canSave: boolean;
   saving: boolean;
+  refreshing: boolean;
+  /** An errors.* or schedule.* copy key. */
   errorKey: string | null;
   /** Set after a save when the device rounded the end time to something else. */
   roundedEnd: TimeOfDay | null;
@@ -68,61 +70,67 @@ export interface ScheduleDraft {
 
 const sameTime = (a: TimeOfDay, b: TimeOfDay): boolean => a.h === b.h && a.m === b.m;
 
+const sameSchedule = (a: Schedule, b: Schedule): boolean =>
+  sameTime(a.start, b.start) &&
+  sameTime(a.end, b.end) &&
+  a.interval === b.interval &&
+  sortDays(a.days).join() === sortDays(b.days).join();
+
 /** The draft of one schedule (new when `index` is undefined) for dispenser `id`. */
 export function useScheduleDraft(id: string, index: number | undefined): ScheduleDraft {
   const { client, store } = useServices();
   const [dispenser, setDispenser] = useState<SavedDispenser | null>(null);
   const [loaded, setLoaded] = useState(false);
+  /** The entry being edited, by value, captured once the list is first known. null = adding. */
+  const [original, setOriginal] = useState<Schedule | null | undefined>(undefined);
   const [edited, setEdited] = useState<Schedule | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [roundedEnd, setRoundedEnd] = useState<TimeOfDay | null>(null);
   const alive = useRef(true);
-
-  const reread = useCallback(async (): Promise<void> => {
-    try {
-      const d = await store.get(id);
-      if (alive.current) {
-        setDispenser(d);
-        setLoaded(true);
-      }
-    } catch (e) {
-      console.error('Could not read the saved dispenser', e);
-      if (alive.current) setLoaded(true);
-    }
-  }, [store, id]);
+  const captured = useRef(false);
+  const inflight = useRef(false);
 
   useEffect(() => {
     alive.current = true;
-    store
-      .get(id)
-      .then((d) => {
-        if (alive.current) {
+    const load = (): void => {
+      store
+        .get(id)
+        .then((d) => {
+          if (!alive.current) return;
           setDispenser(d);
           setLoaded(true);
-        }
-      })
-      .catch((e: unknown) => {
-        console.error('Could not read the saved dispenser', e);
-        if (alive.current) setLoaded(true);
-      });
+          if (!captured.current && d?.schedules) {
+            captured.current = true;
+            setOriginal(index === undefined ? null : (d.schedules.list[index] ?? null));
+          }
+        })
+        .catch((e: unknown) => {
+          console.error('Could not read the saved dispenser', e);
+          if (alive.current) setLoaded(true);
+        });
+    };
+    load();
+    const unsubscribe = store.subscribe(load);
     return () => {
       alive.current = false;
+      unsubscribe();
     };
-  }, [store, id]);
+  }, [store, id, index]);
 
   const list = dispenser?.schedules?.list;
-  const existing = index === undefined ? undefined : list?.[index];
-  const isNew = index === undefined;
+  const editing = original !== undefined && original !== null;
+  const isNew = !editing && index === undefined;
 
-  // The draft is the stored entry (or the defaults) until the user changes something.
+  // The draft is the original entry (or the defaults) until the user changes something.
   const draft: Schedule =
-    edited ?? (existing ? { ...existing, days: sortDays(existing.days) } : NEW_SCHEDULE);
+    edited ?? (original ? { ...original, days: sortDays(original.days) } : NEW_SCHEDULE);
 
   const problems: DraftProblem[] = validateSchedule(draft);
   if (isNew && list && list.length >= MAX_SCHEDULES) problems.push('tooMany');
   const unknown = loaded && dispenser !== null && list === undefined;
-  const stale = loaded && !isNew && list !== undefined && existing === undefined && edited === null;
+  const stale = loaded && index !== undefined && !editing && original === null;
   const ready = loaded && dispenser !== null && list !== undefined && !stale;
 
   const edit = (change: Partial<Schedule>): void => {
@@ -130,51 +138,68 @@ export function useScheduleDraft(id: string, index: number | undefined): Schedul
     setEdited({ ...draft, ...change });
   };
 
-  /** Writes the whole list; the device list is the source of truth, re-read just before. */
-  const write = async (build: (current: Schedule[]) => Schedule[]): Promise<Schedule[] | null> => {
+  /**
+   * Writes the whole list. The device list is the source of truth: it is read fresh and the
+   * entry being edited is found in it by value. If it is gone nothing is written.
+   */
+  const write = async (
+    build: (current: Schedule[], at: number) => Schedule[],
+  ): Promise<Schedule[] | null> => {
     setSaving(true);
     setErrorKey(null);
     try {
       const fresh = (await store.get(id))?.schedules?.list ?? list ?? [];
-      return await client.saveSchedules(id, build(fresh));
+      const at = original ? fresh.findIndex((s) => sameSchedule(s, original)) : -1;
+      if (original && at < 0) {
+        if (alive.current) setErrorKey('schedule.changed');
+        return null;
+      }
+      return await client.saveSchedules(id, build(fresh, at));
     } catch (e) {
       if (alive.current) setErrorKey(errorCopyKey(e));
       return null;
     } finally {
       if (alive.current) setSaving(false);
-      await reread();
     }
   };
 
   const save = async (): Promise<SaveOutcome> => {
-    if (!ready || problems.length > 0 || saving) return 'failed';
-    const entry: Schedule = { ...draft, days: sortDays(draft.days) };
-    const readBack = await write((current) =>
-      index === undefined || current[index] === undefined
-        ? [...current, entry]
-        : current.map((s, i) => (i === index ? entry : s)),
-    );
-    if (!readBack) return 'failed';
-    const stored = readBack.find(
-      (s) =>
-        sameTime(s.start, entry.start) &&
-        s.interval === entry.interval &&
-        sortDays(s.days).join() === entry.days.join(),
-    );
-    if (stored && !sameTime(stored.end, entry.end)) {
+    if (!ready || problems.length > 0 || inflight.current) return 'failed';
+    inflight.current = true;
+    try {
+      const entry: Schedule = { ...draft, days: sortDays(draft.days) };
+      const readBack = await write((current, at) =>
+        at < 0 ? [...current, entry] : current.map((s, i) => (i === at ? entry : s)),
+      );
+      if (!readBack) return 'failed';
+      const stored =
+        readBack.find(
+          (s) =>
+            sameTime(s.start, entry.start) &&
+            s.interval === entry.interval &&
+            sortDays(s.days).join() === entry.days.join(),
+        ) ?? entry;
       if (alive.current) {
-        setEdited({ ...entry, end: stored.end });
-        setRoundedEnd(stored.end);
+        // From now on this stored entry is the one being edited, so a second save replaces it.
+        setOriginal(stored);
+        setEdited(null);
+        setRoundedEnd(sameTime(stored.end, entry.end) ? null : stored.end);
       }
-      return 'rounded';
+      return sameTime(stored.end, entry.end) ? 'done' : 'rounded';
+    } finally {
+      inflight.current = false;
     }
-    return 'done';
   };
 
   const remove = async (): Promise<boolean> => {
-    if (!ready || index === undefined || saving) return false;
-    const readBack = await write((current) => current.filter((_, i) => i !== index));
-    return readBack !== null;
+    if (!ready || !original || inflight.current) return false;
+    inflight.current = true;
+    try {
+      const readBack = await write((current, at) => current.filter((_, i) => i !== at));
+      return readBack !== null;
+    } finally {
+      inflight.current = false;
+    }
   };
 
   return {
@@ -188,6 +213,7 @@ export function useScheduleDraft(id: string, index: number | undefined): Schedul
     sprays: sprayCount(draft),
     canSave: ready && problems.length === 0 && !saving,
     saving,
+    refreshing,
     errorKey,
     roundedEnd,
     setStart: (start) => edit({ start }),
@@ -203,13 +229,15 @@ export function useScheduleDraft(id: string, index: number | undefined): Schedul
     save,
     remove,
     refresh: async () => {
+      if (refreshing) return;
+      setRefreshing(true);
       setErrorKey(null);
       try {
         await client.refresh(id);
       } catch (e) {
         if (alive.current) setErrorKey(errorCopyKey(e));
       }
-      await reread();
+      if (alive.current) setRefreshing(false);
     },
   };
 }

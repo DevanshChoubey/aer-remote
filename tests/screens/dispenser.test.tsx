@@ -35,6 +35,8 @@ const saved: SavedDispenser = { id: 'a', name: 'Kitchen', homeTimeZone: 'UTC', c
 async function mount(
   options: {
     busy?: boolean;
+    absent?: boolean;
+    spraysSinceRefill?: number;
     replyDelayMs?: number;
     schedules?: Schedule[];
     saved?: Partial<SavedDispenser>;
@@ -44,8 +46,9 @@ async function mount(
     a: { busy: options.busy, batteryMv: 2750, replyDelayMs: options.replyDelayMs },
   });
   fake.state('a').schedules = options.schedules ?? [];
+  fake.state('a').spraysSinceRefill = options.spraysSinceRefill ?? 0;
   const store = createMemoryStore();
-  await store.upsert({ ...saved, ...options.saved });
+  if (!options.absent) await store.upsert({ ...saved, ...options.saved });
   const services: Services = {
     store,
     client: new DispenserClient(fake, store, { scheduleGapMs: 0, connectAttempts: 1 }),
@@ -95,9 +98,9 @@ describe('DispenserScreen', () => {
   it('sprays on demand', async () => {
     const { fake, services } = await mount();
     await screen.findByText('Battery 50%');
-    const before = fake.state('a').writes.length;
+    expect(fake.state('a').spraysSinceRefill).toBe(0);
     await fireEvent.press(screen.getByLabelText('Spray now'));
-    await waitFor(() => expect(fake.state('a').writes.length).toBeGreaterThan(before));
+    await waitFor(() => expect(fake.state('a').spraysSinceRefill).toBe(1));
     await waitFor(() =>
       expect(screen.getByLabelText('Spray now').props.accessibilityState.disabled).toBe(false),
     );
@@ -176,14 +179,14 @@ describe('DispenserScreen', () => {
 
   it('confirms before resetting the refill', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const { fake, services } = await mount();
+    const { fake, services } = await mount({ spraysSinceRefill: 500 });
     await screen.findByText('Battery 50%');
     await fireEvent.press(screen.getByLabelText('I refilled it'));
     expect(alert).toHaveBeenCalledTimes(1);
     const buttons = alert.mock.calls[0]?.[2] ?? [];
-    const writes = fake.state('a').writes.length;
+    expect(fake.state('a').spraysSinceRefill).toBe(500);
     await act(async () => buttons.find((b) => b.text === 'Reset')?.onPress?.());
-    await waitFor(() => expect(fake.state('a').writes.length).toBeGreaterThan(writes));
+    await waitFor(() => expect(fake.state('a').spraysSinceRefill).toBe(0));
     await done(services);
     alert.mockRestore();
   });
@@ -213,5 +216,43 @@ describe('DispenserScreen', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(await services.store.get('a')).toBeNull();
     alert.mockRestore();
+  });
+
+  it('shows a titled not-found state for a dispenser that is not saved', async () => {
+    const { services } = await mount({ absent: true });
+    expect(await screen.findByText('Dispenser not found')).toBeTruthy();
+    expect(screen.getByText('This dispenser is not in the app any more.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Back'));
+    expect(mockBack).toHaveBeenCalled();
+    await done(services);
+  });
+
+  it('disables schedule rows, Add and the interval chips while it works', async () => {
+    const { services } = await mount({
+      schedules: [weekdays],
+      replyDelayMs: 50,
+      saved: { schedules: { list: [weekdays], at: '2026-10-26T10:00:00.000Z' } },
+    });
+    expect(screen.getByLabelText('Add schedule').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText(/^Edit schedule/).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText('20 min').props.accessibilityState.disabled).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Add schedule').props.accessibilityState.disabled).toBe(false),
+    );
+    await done(services);
+  });
+
+  it('sprays once when pressed twice quickly', async () => {
+    const { fake, services } = await mount({ replyDelayMs: 20 });
+    await screen.findByText('Battery 50%');
+    await waitFor(() =>
+      expect(screen.getByLabelText('Spray now').props.accessibilityState.disabled).toBe(false),
+    );
+    const spray = screen.getByLabelText('Spray now');
+    await Promise.all([fireEvent.press(spray), fireEvent.press(spray)]);
+    await waitFor(() => expect(fake.state('a').spraysSinceRefill).toBe(1));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(fake.state('a').spraysSinceRefill).toBe(1);
+    await done(services);
   });
 });

@@ -42,7 +42,7 @@ export function DispenserScreen(): ReactElement {
   const { dispenser } = v;
   if (v.missing || !dispenser) {
     return (
-      <Screen title={t('common.loading')}>
+      <Screen title={v.missing ? t('dispenser.notFoundTitle') : t('common.loading')}>
         {v.missing ? <Txt>{t('dispenser.notFound')}</Txt> : null}
         {v.missing ? back : null}
       </Screen>
@@ -119,9 +119,8 @@ export function DispenserScreen(): ReactElement {
                 key={n}
                 label={t('dispenser.intervalChip', { minutes: n })}
                 state={auto === n ? 'selected' : 'neutral'}
-                onToggle={() => {
-                  if (idle) void v.setAutoSpray(n);
-                }}
+                disabled={!idle}
+                onToggle={() => void v.setAutoSpray(n)}
               />
             ))}
           </Row>
@@ -170,6 +169,7 @@ export function DispenserScreen(): ReactElement {
               {list.map((s, i) => (
                 <Touchable
                   key={`${i}-${formatSchedule(s)}`}
+                  disabled={!idle}
                   accessibilityLabel={t('dispenser.scheduleOpen', { summary: formatSchedule(s) })}
                   onPress={() => router.push(`/dispenser/${dispenser.id}/schedule?index=${i}`)}
                 >
@@ -185,6 +185,7 @@ export function DispenserScreen(): ReactElement {
                 <Button
                   variant="secondary"
                   icon="+"
+                  disabled={!idle}
                   label={t('dispenser.addSchedule')}
                   onPress={() => router.push(`/dispenser/${dispenser.id}/schedule`)}
                 />

@@ -24,6 +24,7 @@ export default {
   minuteUp: '{what}, minutes up',
   minuteDown: '{what}, minutes down',
   rounded: 'The dispenser rounded the end time to {time}.',
+  changed: 'This schedule changed on the dispenser. Go back and try again.',
   missing: 'That schedule is not on the dispenser any more.',
   unknown: "Refresh to see the dispenser's schedules before editing.",
   refresh: 'Refresh',

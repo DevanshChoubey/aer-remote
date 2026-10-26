@@ -26,14 +26,30 @@ export function ScheduleEditor(): ReactElement {
   const params = useLocalSearchParams<{ id: string; index?: string }>();
   const id = String(params.id);
   const parsed = params.index === undefined ? undefined : Number(params.index);
-  const index =
-    parsed !== undefined && Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+  const valid = parsed !== undefined && Number.isInteger(parsed) && parsed >= 0;
+  const index = valid ? parsed : undefined;
+  const badIndex = parsed !== undefined && !valid;
   const d = useScheduleDraft(id, index);
 
   const back = (): void => router.back();
   const title = t(d.isNew ? 'schedule.titleNew' : 'schedule.titleEdit');
   const backButton = <Button variant="ghost" label={t('common.back')} onPress={back} />;
 
+  if (badIndex || d.stale) {
+    return (
+      <Screen title={title}>
+        <Txt>{t('schedule.missing')}</Txt>
+        {backButton}
+      </Screen>
+    );
+  }
+  if (!d.loaded) {
+    return (
+      <Screen title={title}>
+        <Txt color="muted">{t('common.loading')}</Txt>
+      </Screen>
+    );
+  }
   if (d.missing) {
     return (
       <Screen title={title}>
@@ -47,20 +63,16 @@ export function ScheduleEditor(): ReactElement {
       <Screen title={title}>
         <Txt>{t('schedule.unknown')}</Txt>
         {d.errorKey ? <Txt color="warn">{t(d.errorKey)}</Txt> : null}
-        <Button label={t('schedule.refresh')} onPress={() => void d.refresh()} />
+        <Button
+          label={t('schedule.refresh')}
+          onPress={() => void d.refresh()}
+          disabled={d.refreshing}
+          loading={d.refreshing}
+        />
         {backButton}
       </Screen>
     );
   }
-  if (d.stale) {
-    return (
-      <Screen title={title}>
-        <Txt>{t('schedule.missing')}</Txt>
-        {backButton}
-      </Screen>
-    );
-  }
-
   const onSave = async (): Promise<void> => {
     if ((await d.save()) === 'done') back();
   };

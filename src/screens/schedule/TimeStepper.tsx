@@ -32,7 +32,7 @@ function StepButton(props: StepButtonProps): ReactElement {
 /** A time picker built from big buttons: hour up and down by 1, minutes by 5, wrapping round. */
 export function TimeStepper(props: TimeStepperProps): ReactElement {
   const { label, value, onChange } = props;
-  const spoken = (key: string): string => t(key, { what: label });
+  const spoken = (key: string): string => t(key, { what: `${label} ${formatClock(value)}` });
   return (
     <Column gap={2}>
       <Txt variant="bodyBold">{label}</Txt>

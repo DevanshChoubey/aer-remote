@@ -30,6 +30,7 @@ export default {
   renameSave: 'Save name',
   schedulesUnknown: 'Refresh to see schedules',
   refresh: 'Refresh',
+  notFoundTitle: 'Dispenser not found',
   notFound: 'This dispenser is not in the app any more.',
   scheduleOpen: 'Edit schedule: {summary}',
 } as const;

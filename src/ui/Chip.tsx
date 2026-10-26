@@ -8,6 +8,7 @@ export interface ChipProps {
   label: string;
   state: ChipState;
   onToggle?: () => void;
+  disabled?: boolean;
 }
 
 const LOOK: Record<ChipState, { bg: ColorToken; border: ColorToken; text: ColorToken }> = {
@@ -15,8 +16,10 @@ const LOOK: Record<ChipState, { bg: ColorToken; border: ColorToken; text: ColorT
   selected: { bg: 'accent', border: 'deepTerracotta', text: 'accentInk' },
 };
 
+const DISABLED_LOOK = { bg: 'soft', border: 'border', text: 'muted' } as const;
+
 export function Chip(props: ChipProps): ReactElement {
-  const look = LOOK[props.state];
+  const look = props.disabled ? DISABLED_LOOK : LOOK[props.state];
   const selected = props.state === 'selected';
   const body = (
     <Box
@@ -37,6 +40,7 @@ export function Chip(props: ChipProps): ReactElement {
   return (
     <Touchable
       onPress={props.onToggle}
+      disabled={props.disabled}
       selected={selected}
       accessibilityRole="togglebutton"
       accessibilityLabel={props.label}

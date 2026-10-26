@@ -34,6 +34,8 @@ export function useDispenser(id: string): DispenserView {
   const [busy, setBusy] = useState<Busy>('refresh');
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const alive = useRef(true);
+  /** True while any action runs; a second press is ignored, not queued. */
+  const inflight = useRef(true);
 
   const reread = useCallback(async (): Promise<void> => {
     try {
@@ -74,6 +76,8 @@ export function useDispenser(id: string): DispenserView {
 
   const act = useCallback(
     async (kind: Exclude<Busy, null>, fn: () => Promise<unknown>): Promise<boolean> => {
+      if (inflight.current) return false;
+      inflight.current = true;
       setBusy(kind);
       setErrorKey(null);
       let ok = true;
@@ -83,6 +87,7 @@ export function useDispenser(id: string): DispenserView {
         ok = false;
         if (alive.current) setErrorKey(errorCopyKey(e));
       }
+      inflight.current = false;
       if (alive.current) setBusy(null);
       await reread();
       return ok;
@@ -102,6 +107,7 @@ export function useDispenser(id: string): DispenserView {
         if (alive.current) setErrorKey(errorCopyKey(e));
       })
       .finally(() => {
+        inflight.current = false;
         if (alive.current) setBusy(null);
         void reread();
       });
