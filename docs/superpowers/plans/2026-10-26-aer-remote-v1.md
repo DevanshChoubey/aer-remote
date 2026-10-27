@@ -17,7 +17,7 @@ Prettier, lefthook.
 **Spec:** `docs/superpowers/specs/2026-10-26-aer-remote-design.md`. Protocol:
 `docs/protocol/aer-ble-protocol.md`. Executors read both.
 
-**Reference project:** `/media/devansh/Experiment/playground/homeInventory` (call it HI). Several tasks
+**Reference project:** the author's Home Inventory app, a separate private project (call it HI). Several tasks
 say "copy from HI"; copy, then adapt names and folders as stated.
 
 ## Global Constraints
@@ -530,5 +530,5 @@ spike route from release builds (`__DEV__` only).
   lint, `bunx expo-doctor`. Expected: all pass.
 - [ ] **Step 5:** Commit `feat(settings): add settings, icon and README`.
 - [ ] **Step 6:** Create the private repo and push:
-  `gh repo create DevanshChoubey/aer-remote --private --source . --push` (with
-  `gh auth switch -u DevanshChoubey` first, and back afterwards if DevBey was active).
+  `gh repo create DevanshChoubey/aer-remote --private --source . --push` (signed in to gh as
+  DevanshChoubey).

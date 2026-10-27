@@ -8,8 +8,9 @@ Aer Remote is a phone app that controls a Godrej aer Smart Matic air freshener o
 can spray on demand, turn auto spray on or off, set up to 10 spray schedules and check the battery
 and refill level. It works fully offline, needs no account and runs on iOS and Android.
 
-**Status: v1, awaiting hardware test.** The code is complete and tested against a simulated
-dispenser, but it has not yet run on a real one. See [Project status](#project-status-and-roadmap).
+**Status: v1, awaiting the iOS hardware test.** The code is complete and tested against a
+simulated dispenser. It passed the hardware test on one Android phone (10/10 connects at about 3 m);
+iOS is not tested yet. See [Project status](#project-status-and-roadmap).
 
 Works with the Godrej aer Smart Matic. Unofficial; not affiliated with or endorsed by Godrej.
 

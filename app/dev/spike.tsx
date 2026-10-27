@@ -37,7 +37,9 @@ const SCAN_MS = 8000;
 const CONNECT_MS = 8000;
 const PASS_BAR_MS = 5000;
 const REPEATS = 10;
-const GAP_MS = 1000;
+// The dispenser refuses a new connection for about a second after one closes; at a 1 s gap every
+// other run failed fast, at 5 s all ten passed.
+const GAP_MS = 5000;
 const HOME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 type Log = (line: string) => void;
