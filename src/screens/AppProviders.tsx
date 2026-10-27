@@ -28,10 +28,12 @@ export function AppProviders(props: {
   preferences?: ThemePreferenceStore;
 }): ReactElement | null {
   const { preferences, services } = props;
-  // A backgrounded app must not keep holding the dispenser's single connection slot.
+  // A backgrounded app must not keep holding the dispenser's single connection slot. Back in the
+  // foreground, resync alerts: the user may have changed notifications in the phone settings.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background') void services.client.closeAll();
+      else if (state === 'active') void services.alerts.sync({ mayAsk: false });
     });
     return () => sub.remove();
   }, [services]);

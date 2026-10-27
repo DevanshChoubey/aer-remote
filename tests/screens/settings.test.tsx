@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import { Linking } from 'react-native';
+import { AppState, Linking, type AppStateStatus } from 'react-native';
 
 import { createFakeTransport, type FakeTransport } from '@/ble/testing/fakeDispenser';
 import { ServicesProvider, type AlertPermission, type Services } from '@/core';
@@ -25,6 +25,16 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack, push: jest.fn(), replace: jest.fn() }),
 }));
+
+// The react-native jest mock returns no subscription; record the listeners instead.
+const appStateHandlers: ((s: AppStateStatus) => void)[] = [];
+beforeEach(() => {
+  appStateHandlers.length = 0;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((type, cb) => {
+    if (type === 'change') appStateHandlers.push(cb as (s: AppStateStatus) => void);
+    return { remove: jest.fn() };
+  });
+});
 
 async function mount(
   onPreferenceChange = jest.fn(),
@@ -140,6 +150,17 @@ describe('SettingsScreen alerts', () => {
     await mount();
     await screen.findByLabelText('Refill and battery alerts');
     expect(screen.queryByText(/Notifications are off/)).toBeNull();
+    expect(screen.queryByLabelText('Open phone settings')).toBeNull();
+  });
+
+  it('reads the permission again when the app comes back from the phone settings', async () => {
+    const { scheduler } = await mount(jest.fn(), 'denied');
+    expect(await screen.findByText(/Notifications are off/)).toBeTruthy();
+    scheduler.setPermission('granted');
+    await act(async () => {
+      for (const h of appStateHandlers) h('active');
+    });
+    await waitFor(() => expect(screen.queryByText(/Notifications are off/)).toBeNull());
     expect(screen.queryByLabelText('Open phone settings')).toBeNull();
   });
 

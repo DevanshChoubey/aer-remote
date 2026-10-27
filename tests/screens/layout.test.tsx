@@ -140,6 +140,27 @@ describe('AppProviders', () => {
     }
   });
 
+  it('resyncs alerts, without asking, when the app comes back to the foreground', async () => {
+    let handler: (s: AppStateStatus) => void = () => undefined;
+    const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((type, cb) => {
+      if (type === 'change') handler = cb as (s: AppStateStatus) => void;
+      return { remove: jest.fn() };
+    });
+    const sync = jest.spyOn(services.alerts, 'sync');
+    try {
+      await render(tree());
+      sync.mockClear();
+      await act(async () => handler('background'));
+      expect(sync).not.toHaveBeenCalled();
+      await act(async () => handler('active'));
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(sync).toHaveBeenCalledWith({ mayAsk: false });
+    } finally {
+      listen.mockRestore();
+      sync.mockRestore();
+    }
+  });
+
   it('starts alerts once and stops on unmount', async () => {
     const listen = jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
     const stop = jest.fn();

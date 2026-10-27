@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { useServices, type AlertPermission } from '@/core';
 import { errorCopyKey } from '@/screens/errorCopy';
@@ -37,15 +38,23 @@ export function useSettings(): {
   }, [alerts]);
   useEffect(() => {
     let alive = true;
-    read()
-      .then(({ on, permission }) => {
-        if (!alive) return;
-        setOn(on);
-        setPermission(permission);
-      })
-      .catch((e: unknown) => console.warn('Could not read the alert settings', e));
+    const load = (): void => {
+      read()
+        .then(({ on, permission }) => {
+          if (!alive) return;
+          setOn(on);
+          setPermission(permission);
+        })
+        .catch((e: unknown) => console.warn('Could not read the alert settings', e));
+    };
+    load();
+    // Coming back from the phone settings may have changed the permission.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') load();
+    });
     return () => {
       alive = false;
+      sub.remove();
     };
   }, [read]);
   const setAlertsOn = useCallback(
