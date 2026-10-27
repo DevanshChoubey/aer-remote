@@ -1,3 +1,5 @@
+import type { Weekday } from '@/protocol/schedule';
+
 const MS_PER_MIN = 60_000;
 
 /** Offset from UTC, in minutes, that `timeZone` has at the instant `ms`. */
@@ -39,4 +41,45 @@ export function zoneInfo(
   const standardOffsetMin = Math.min(...offsets);
   const maxOffset = Math.max(...offsets);
   return { standardOffsetMin, dstSavingsMs: (maxOffset - standardOffsetMin) * MS_PER_MIN };
+}
+
+const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+export interface WallClock {
+  year: number;
+  month: number;
+  day: number;
+  weekday: Weekday;
+  /** Minutes since local midnight. */
+  minutes: number;
+}
+
+/** The calendar date and time of day that `timeZone` shows at the instant `ms`. */
+export function wallClock(ms: number, timeZone: string): WallClock {
+  const local = new Date(ms + offsetMinutes(timeZone, ms) * MS_PER_MIN);
+  return {
+    year: local.getUTCFullYear(),
+    month: local.getUTCMonth() + 1,
+    day: local.getUTCDate(),
+    weekday: WEEKDAYS[local.getUTCDay()] ?? 'sun',
+    minutes: local.getUTCHours() * 60 + local.getUTCMinutes(),
+  };
+}
+
+/**
+ * The instant (ms) at which `timeZone` shows this date and `minutes` since midnight. Out-of-range
+ * days or minutes roll over. A time skipped by spring-forward lands just after the gap.
+ */
+export function fromWallClock(
+  timeZone: string,
+  year: number,
+  month: number,
+  day: number,
+  minutes: number,
+): number {
+  const naive = Date.UTC(year, month - 1, day, 0, minutes);
+  const first = offsetMinutes(timeZone, naive);
+  const guess = naive - first * MS_PER_MIN;
+  const second = offsetMinutes(timeZone, guess);
+  return second === first ? guess : naive - second * MS_PER_MIN;
 }
