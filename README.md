@@ -160,7 +160,8 @@ A build signed with a free Apple ID expires after 7 days. Rebuild it then.
 ### Development
 
 ```sh
-bun run start   # or: bunx expo start --dev-client
+bun run android # build, install and start the development build (bun run ios on the Mac)
+bun run start   # start Metro for an installed build; or: bunx expo start --dev-client
 bun run test
 bun run typecheck
 bun run lint
