@@ -1,0 +1,72 @@
+name: Bug report
+description: Something in Aer Remote does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Before you start: close the official app and any other phone
+        connected to the dispenser, since it accepts one phone at a time. Leave out anything that
+        identifies you or your home.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and any message the app showed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the dispenser
+        2. Tap Spray now
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone model
+      placeholder: Pixel 7, iPhone 13
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      placeholder: Android 14, iOS 18.1
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Dispenser firmware
+      description: Shown on the dispenser screen under Status, for example "Firmware 3.0.8-IN".
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build type
+      options:
+        - Debug (development build with Metro)
+        - Release
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      description: The commit you built from, or the version in Settings.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Metro or device logs, if you have them.
+      render: text

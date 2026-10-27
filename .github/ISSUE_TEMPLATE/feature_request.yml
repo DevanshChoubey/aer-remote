@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an idea for Aer Remote.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Aer Remote stays offline, with no account and no network. Ideas that need a server or the
+        internet are out of scope. Check the FAQ for overnight schedules and per-schedule pause.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How could the app help?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other options you considered
+  - type: checkboxes
+    id: offline
+    attributes:
+      label: Scope
+      options:
+        - label: This works fully offline, with no account.
+          required: true

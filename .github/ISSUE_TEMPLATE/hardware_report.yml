@@ -1,0 +1,125 @@
+name: Hardware test report
+description: Results from running the Bluetooth test screen on a real dispenser.
+title: 'Hardware report: '
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. This form mirrors `docs/spike/hardware-results.md`.
+
+        1. Build a debug build (`bunx expo run:android` or `bunx expo run:ios --device`).
+        2. Close the official app: the dispenser accepts one connection at a time.
+        3. On the home screen, tap **Bluetooth test** and work through the buttons.
+
+        Leave out anything that identifies you or your home.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - iOS
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone model
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      description: Android 12 (API 31) is the minimum.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build command and commit
+      placeholder: bunx expo run:android, commit abc1234
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date of the test
+  - type: input
+    id: firmware
+    attributes:
+      label: Dispenser firmware
+      description: The `fV` value from fetch status.
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Dispenser name as scanned
+      description: The advertised name only. Leave out the device id if you prefer.
+  - type: input
+    id: channels
+    attributes:
+      label: Channels that answered
+      description: Command, schedule and reply UUID suffixes, for example 0003 / 0004 / 0001.
+  - type: checkboxes
+    id: buttons
+    attributes:
+      label: Buttons that worked
+      description: Tick each one that worked. Add notes below for any that did not.
+      options:
+        - label: Scan
+        - label: Connect
+        - label: Fetch status
+        - label: Set time
+        - label: Spray now
+        - label: Auto 10 / Auto off
+        - label: Read schedules
+        - label: Save test schedule
+        - label: Remove schedules
+        - label: Blink
+  - type: textarea
+    id: button-notes
+    attributes:
+      label: Notes on the buttons
+  - type: dropdown
+    id: notifications
+    attributes:
+      label: Did subscribing to reply notifications work?
+      options:
+        - 'Yes'
+        - 'No'
+    validations:
+      required: true
+  - type: input
+    id: monitor-error
+    attributes:
+      label: MONITOR ERROR text, if any
+  - type: input
+    id: passes
+    attributes:
+      label: 'Pass bar: connect + fetch status within 5 s, out of 10'
+      placeholder: 10/10
+    validations:
+      required: true
+  - type: input
+    id: distance
+    attributes:
+      label: Distance from the dispenser
+      placeholder: about 3 m
+  - type: input
+    id: times
+    attributes:
+      label: Connect times (ms), runs 1 to 10
+      placeholder: 820, 760, 905, ...
+  - type: textarea
+    id: mismatches
+    attributes:
+      label: Replies that did not match the protocol notes
+      description: Paste the TX / RX hex lines from the test log and what the notes expected.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Other notes
