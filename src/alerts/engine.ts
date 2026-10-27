@@ -63,6 +63,14 @@ function cycleFor(kind: AlertKind, d: SavedDispenser): string {
   return BATTERY_CYCLE;
 }
 
+/** A cancelled alert that never fired is not delivered: forget its state. */
+function forgetUnfired(delivered: AlertState, key: string, now: Date): boolean {
+  const d = delivered[key];
+  if (d === undefined || new Date(d.at).getTime() <= now.getTime()) return false;
+  delete delivered[key];
+  return true;
+}
+
 function warn(what: string, e: unknown): void {
   console.warn(what, e);
 }
@@ -111,6 +119,7 @@ export function createAlerts(deps: AlertsDeps): Alerts {
       changed = true;
     }
 
+    const collapses: { key: string; cycle: string; severeKey: string; severeDone: boolean }[] = [];
     const toSchedule: { alert: PlannedAlert; dispenser: SavedDispenser }[] = [];
     for (const dispenser of dispensers) {
       const status = dispenser.lastStatus;
@@ -152,8 +161,12 @@ export function createAlerts(deps: AlertsDeps): Alerts {
         const mild = byKind.get(milder);
         if (!worse || !mild || isDelivered(milder) || worse.at.getTime() > mild.at.getTime())
           continue;
-        delivered[mild.key] = { at: at.toISOString(), cycle: cycleFor(milder, dispenser) };
-        changed = true;
+        collapses.push({
+          key: mild.key,
+          cycle: cycleFor(milder, dispenser),
+          severeKey: worse.key,
+          severeDone: isDelivered(severe),
+        });
         dropped.add(milder);
       }
       for (const alert of planned) {
@@ -167,9 +180,11 @@ export function createAlerts(deps: AlertsDeps): Alerts {
     for (const key of pending) {
       if (saved.has(dispenserIdOf(key)) && !wanted.has(key)) {
         await attempt('Could not cancel an alert', () => scheduler.cancel(key));
+        if (forgetUnfired(delivered, key, at)) changed = true;
       }
     }
 
+    const scheduledKeys = new Set<string>();
     let permission = await scheduler.permission();
     if (toSchedule.length > 0 && permission === 'undetermined' && mayAsk) {
       permission = await scheduler.requestPermission();
@@ -187,12 +202,19 @@ export function createAlerts(deps: AlertsDeps): Alerts {
           }),
         );
         if (!ok) continue;
+        scheduledKeys.add(alert.key);
         delivered[alert.key] = {
           at: alert.at.toISOString(),
           cycle: cycleFor(alert.kind, dispenser),
         };
         changed = true;
       }
+    }
+    // Count the milder alert as delivered only once the worse one is out or already delivered.
+    for (const c of collapses) {
+      if (!c.severeDone && !scheduledKeys.has(c.severeKey)) continue;
+      delivered[c.key] = { at: at.toISOString(), cycle: c.cycle };
+      changed = true;
     }
     if (changed) await attempt('Could not save the alert state', () => state.save(delivered));
   };
@@ -212,7 +234,17 @@ export function createAlerts(deps: AlertsDeps): Alerts {
       enqueue(async () => {
         await attempt('Could not save the alerts switch', () => state.setEnabled(on));
         if (on) await syncOnce(true);
-        else await attempt('Could not cancel alerts', () => scheduler.cancelAll());
+        else {
+          await attempt('Could not cancel alerts', () => scheduler.cancelAll());
+          await attempt('Could not save the alert state', async () => {
+            const kept = cleanState(await state.load());
+            let changed = false;
+            for (const key of Object.keys(kept)) {
+              if (forgetUnfired(kept, key, now())) changed = true;
+            }
+            if (changed) await state.save(kept);
+          });
+        }
       }),
     permission: () => scheduler.permission(),
     pendingKeys: () => scheduler.pendingKeys(),

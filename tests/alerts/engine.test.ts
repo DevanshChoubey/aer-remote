@@ -335,6 +335,60 @@ describe('alert engine', () => {
     warn.mockRestore();
   });
 
+  it('forgets a cancelled alert that never fired, so it is scheduled again later', async () => {
+    const t = setup();
+    t.scheduler.setPermission('granted');
+    await t.store.upsert(dispenser({ spraysSinceRefill: 1900 }));
+    await t.alerts.sync({ mayAsk: false });
+    const due = t.scheduler.scheduled.get('abc:refillLow')?.at;
+    expect(due).toBeDefined();
+    await t.alerts.setEnabled(false);
+    expect((await t.state.load())['abc:refillLow']).toBeUndefined();
+    t.setNow(new Date((due?.getTime() ?? 0) + 60_000));
+    await t.alerts.setEnabled(true);
+    const keys = [...t.scheduler.scheduled.keys()];
+    // Due time passed while off: it fires now (not pending) but is recorded, not skipped.
+    expect((await t.state.load())['abc:refillLow']).toBeDefined();
+    expect(keys).not.toContain('abc:refillLow');
+  });
+
+  it('forgets a pending alert cancelled because the plan dropped it', async () => {
+    const t = setup();
+    t.scheduler.setPermission('granted');
+    await t.store.upsert(dispenser({ spraysSinceRefill: 1900 }));
+    await t.alerts.sync({ mayAsk: false });
+    expect((await t.state.load())['abc:refillOut']).toBeDefined();
+    await t.store.upsert({
+      ...dispenser({ spraysSinceRefill: 1900 }),
+      schedules: { list: [], at: READING },
+    });
+    await t.alerts.sync({ mayAsk: false });
+    expect(t.scheduler.scheduled.has('abc:refillOut')).toBe(false);
+    expect((await t.state.load())['abc:refillOut']).toBeUndefined();
+  });
+
+  it('once per can: a higher count in the same can does not repeat a delivered alert', async () => {
+    const t = setup();
+    t.scheduler.setPermission('granted');
+    await t.store.upsert(dispenser({ spraysSinceRefill: 2000 }));
+    await t.alerts.sync({ mayAsk: false });
+    t.setNow(new Date(NOW.getTime() + 60_000));
+    await t.store.upsert(
+      dispenser({ spraysSinceRefill: 2050, at: new Date(NOW.getTime() + 60_000).toISOString() }),
+    );
+    const spy = jest.spyOn(t.scheduler, 'schedule');
+    await t.alerts.sync({ mayAsk: false });
+    expect(spy.mock.calls.map((c) => c[0].key)).not.toContain('abc:refillLow');
+  });
+
+  it('does not count the milder alert delivered while the worse one could not be scheduled', async () => {
+    const t = setup();
+    t.scheduler.setPermission('denied');
+    await t.store.upsert(dispenser({ batteryMv: 2300 }));
+    await t.alerts.sync({ mayAsk: true });
+    expect((await t.state.load())['abc:batteryLow']).toBeUndefined();
+  });
+
   it('onOpen maps an unsaved dispenser to null', async () => {
     const t = setup();
     await t.store.upsert(dispenser());
