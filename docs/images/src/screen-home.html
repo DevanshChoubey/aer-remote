@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Design preview: Home</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Nunito:wght@500;700&display=block"
+    />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <!-- Mirrors src/screens/home/HomeScreen.tsx and DispenserTile.tsx with copy from src/i18n/en/home.ts. -->
+  <body class="light">
+    <div class="single">
+      <div class="phone">
+        <div class="screen">
+          <div class="camera"></div>
+          <div class="statusbar">
+            <span>4:15</span
+            ><span class="dots"><i></i><i></i><i></i><span class="bat"></span></span>
+          </div>
+          <div class="content">
+            <div class="title">Your dispensers</div>
+            <div class="row end"><div class="btn ghost">Settings</div></div>
+            <div class="col g4">
+              <div class="card">
+                <div class="heading">Living room</div>
+                <div class="row g2 wrap">
+                  <span class="badge ok">Battery 86%</span>
+                  <span class="badge ok">Refill 64%</span>
+                </div>
+                <div class="bold">Next spray 4:20 PM</div>
+                <div class="caption muted">Last checked 5 min ago</div>
+              </div>
+              <div class="card">
+                <div class="heading">Bedroom</div>
+                <div class="row g2 wrap">
+                  <span class="badge low">Battery 18%, low</span>
+                  <span class="badge ok">Refill 41%</span>
+                </div>
+                <div class="bold">No schedule today</div>
+                <div class="bold warn">Battery low. Replace the batteries soon.</div>
+                <div class="caption muted">Last checked 2 h ago</div>
+              </div>
+              <div class="btn primary"><span>+</span><span>Add dispenser</span></div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="preview-label"><b>Design preview</b> · built from the app's tokens and copy</div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,379 @@
+/*
+ * Shared styles for the README images. Values mirror src/theme/tokens.ts and the components in
+ * src/ui/ (Card, Button, Chip, StatusBadge, Toggle) so the previews match what the app renders.
+ * If a token changes, change it here too, then run scripts/render-doc-images.sh.
+ */
+
+@font-face {
+  font-family: 'Fraunces App';
+  font-weight: 700;
+  src: url('../../../node_modules/@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf');
+}
+@font-face {
+  font-family: 'Nunito App';
+  font-weight: 500;
+  src: url('../../../node_modules/@expo-google-fonts/nunito/500Medium/Nunito_500Medium.ttf');
+}
+@font-face {
+  font-family: 'Nunito App';
+  font-weight: 700;
+  src: url('../../../node_modules/@expo-google-fonts/nunito/700Bold/Nunito_700Bold.ttf');
+}
+
+/* lightTokens */
+.light {
+  --bg: #fcf1de;
+  --stage: #f4dfbd;
+  --surface: #fff8ec;
+  --ink: #3d2216;
+  --muted: #866650;
+  --accent: #c4502a;
+  --accent-ink: #fffdf8;
+  --soft: #f7dfb9;
+  --border: #ebcca0;
+  --saffron: #f0b56e;
+  --deep-terracotta: #a3482a;
+  --warn: #8f3a1c;
+  --warn-soft: #f9d9c9;
+  --ok: #3b6232;
+  --ok-soft: #e2ebcd;
+  --track: #9a7a60;
+  --card-shadow: 0 4px 10px rgba(61, 34, 22, 0.12);
+  --bezel: #4f2e1f;
+}
+
+/* darkTokens */
+.dark {
+  --bg: #1e130d;
+  --stage: #2a1b12;
+  --surface: #35231a;
+  --ink: #fbeedb;
+  --muted: #c9ab94;
+  --accent: #e9855f;
+  --accent-ink: #2a140a;
+  --soft: #4a3022;
+  --border: #5a3e2c;
+  --saffron: #f0b56e;
+  --deep-terracotta: #e9855f;
+  --warn: #f3a98b;
+  --warn-soft: #51281a;
+  --ok: #a9d69c;
+  --ok-soft: #2e3f27;
+  --track: #9a7b63;
+  --card-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  --bezel: #0d0805;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body {
+  font-family: 'Nunito App', 'Nunito', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A page that holds one phone and its label. */
+.single {
+  width: 470px;
+  height: 1000px;
+  background: var(--stage);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.preview-label {
+  font:
+    700 15px/1 'Nunito App',
+    'Nunito',
+    sans-serif;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.preview-label b {
+  color: var(--deep-terracotta);
+}
+
+/* Generic phone frame: no brand, 390 x 844 screen. */
+.phone {
+  width: 414px;
+  height: 868px;
+  border-radius: 62px;
+  padding: 12px;
+  background: var(--bezel);
+  box-shadow: 0 30px 60px -20px rgba(61, 34, 22, 0.45);
+  flex-shrink: 0;
+}
+.screen {
+  width: 390px;
+  height: 844px;
+  border-radius: 50px;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.camera {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 110px;
+  height: 32px;
+  border-radius: 20px;
+  background: var(--bezel);
+}
+.statusbar {
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 34px 0;
+  font:
+    700 16px/1 'Nunito App',
+    'Nunito',
+    sans-serif;
+}
+.statusbar .dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.statusbar .dots i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.statusbar .dots .bat {
+  width: 24px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink);
+  background: linear-gradient(90deg, var(--ink) 70%, transparent 70%);
+}
+.home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ink);
+  opacity: 0.85;
+}
+/* Screen: Column gap 4 (16), px 5 (20), py 4 (16). */
+.content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.wrap {
+  flex-wrap: wrap;
+}
+.between {
+  justify-content: space-between;
+}
+.end {
+  justify-content: flex-end;
+}
+.g1 {
+  gap: 4px;
+}
+.g2 {
+  gap: 8px;
+}
+.g3 {
+  gap: 12px;
+}
+.g4 {
+  gap: 16px;
+}
+
+/* Txt variants: title 30, heading 21, body 16, caption 13. */
+.title,
+.heading {
+  font-family: 'Fraunces App', 'Fraunces', Georgia, serif;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.title {
+  font-size: 30px;
+}
+.heading {
+  font-size: 21px;
+}
+.body,
+.bold,
+.caption {
+  font-family: 'Nunito App', 'Nunito', sans-serif;
+  line-height: 1.35;
+}
+.body {
+  font-size: 16px;
+  font-weight: 500;
+}
+.bold {
+  font-size: 16px;
+  font-weight: 700;
+}
+.caption {
+  font-size: 13px;
+  font-weight: 500;
+}
+.muted {
+  color: var(--muted);
+}
+.warn {
+  color: var(--warn);
+}
+
+/* Card: surface, border, radius md (20), shadow card, p 4 (16), gap 3 (12). */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Button: radius pill, px 6 (24), py 4 (16), bodyBold. Full width inside a Column. */
+.btn {
+  border-radius: 999px;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  font:
+    700 16px/1.35 'Nunito App',
+    'Nunito',
+    sans-serif;
+  border: 1px solid transparent;
+}
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.secondary {
+  background: var(--soft);
+  border-color: var(--border);
+  color: var(--ink);
+}
+.btn.ghost {
+  color: var(--deep-terracotta);
+}
+
+/* Chip: radius pill, px 4 (16), py 2 (8). */
+.chip {
+  border-radius: 999px;
+  padding: 8px 16px;
+  font:
+    700 16px/1.35 'Nunito App',
+    'Nunito',
+    sans-serif;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+}
+.chip.on {
+  background: var(--accent);
+  border-color: var(--deep-terracotta);
+  color: var(--accent-ink);
+}
+
+/* StatusBadge: radius pill, px 3 (12), py 1 (4), caption. */
+.badge {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font:
+    500 13px/1.35 'Nunito App',
+    'Nunito',
+    sans-serif;
+}
+.badge.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.badge.low {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* Toggle: a whole-row switch. Track accent when on, thumb surface. */
+.switch {
+  width: 51px;
+  height: 31px;
+  border-radius: 16px;
+  background: var(--track);
+  position: relative;
+  flex-shrink: 0;
+}
+.switch.on {
+  background: var(--accent);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.switch.on::after {
+  left: 22px;
+}
+
+/* TimeStepper button: soft, border, pill, px 4, py 2. */
+.step {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 999px;
+  background: var(--soft);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    700 18px/1 'Nunito App',
+    'Nunito',
+    sans-serif;
+}
+
+/* A pressable list row in a card (schedules, dispensers). Touchable min height 48. */
+.item {
+  min-height: 48px;
+  justify-content: center;
+}

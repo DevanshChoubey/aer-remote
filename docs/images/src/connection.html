@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>How Aer Remote connects</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Nunito:wght@500;700&display=block"
+    />
+    <link rel="stylesheet" href="app.css" />
+    <!-- Facts from src/device/session.ts (openSession, reply matching) and src/device/client.ts (queue, idle close). -->
+    <style>
+      body {
+        width: 1280px;
+        height: 680px;
+        background: var(--bg);
+        color: var(--ink);
+        padding: 36px 56px;
+        position: relative;
+      }
+      h1 {
+        margin: 0;
+        font-size: 34px;
+      }
+      .sub {
+        margin: 6px 0 20px;
+        color: var(--muted);
+        font-size: 17px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 330px;
+        gap: 28px;
+      }
+      .seq {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: var(--card-shadow);
+        padding: 18px 26px 16px;
+      }
+      .heads {
+        display: grid;
+        grid-template-columns: 170px 1fr 170px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .actor {
+        text-align: center;
+        font:
+          700 17px/1.2 'Nunito App',
+          'Nunito',
+          sans-serif;
+        background: var(--soft);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 9px 0;
+      }
+      .actor.dev {
+        background: var(--accent);
+        color: var(--accent-ink);
+        border-color: var(--deep-terracotta);
+      }
+      .air {
+        text-align: center;
+        color: var(--muted);
+        font:
+          700 14px/1 'Nunito App',
+          'Nunito',
+          sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .life {
+        position: absolute;
+        top: 66px;
+        bottom: 16px;
+        width: 0;
+        border-left: 2px dashed var(--border);
+      }
+      .life.l {
+        left: calc(26px + 85px);
+      }
+      .life.r {
+        right: calc(26px + 85px);
+      }
+      .msg {
+        display: grid;
+        grid-template-columns: 85px 1fr 85px;
+        align-items: center;
+        height: 37px;
+        position: relative;
+      }
+      .arrow {
+        grid-column: 2;
+        position: relative;
+        height: 2px;
+        background: var(--accent);
+      }
+      .arrow::after {
+        content: '';
+        position: absolute;
+        right: -2px;
+        top: -6px;
+        border-left: 12px solid var(--accent);
+        border-top: 7px solid transparent;
+        border-bottom: 7px solid transparent;
+      }
+      .arrow.back {
+        background: var(--ok);
+      }
+      .arrow.back::after {
+        right: auto;
+        left: -2px;
+        border-left: 0;
+        border-right: 12px solid var(--ok);
+      }
+      .arrow span {
+        position: absolute;
+        left: 50%;
+        transform: translate(-50%, -100%);
+        top: -3px;
+        white-space: nowrap;
+        font:
+          700 14.5px/1.2 'Nunito App',
+          'Nunito',
+          sans-serif;
+        background: var(--surface);
+        padding: 0 8px;
+      }
+      .arrow.back span {
+        color: var(--ok);
+      }
+      .note {
+        grid-column: 1 / 4;
+        justify-self: start;
+        margin-left: 100px;
+        font:
+          700 14px/1.2 'Nunito App',
+          'Nunito',
+          sans-serif;
+        color: var(--deep-terracotta);
+        background: var(--warn-soft);
+        border-radius: 10px;
+        padding: 6px 12px;
+      }
+      .note.muted {
+        color: var(--muted);
+        background: var(--stage);
+      }
+      .side {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .side .card {
+        gap: 6px;
+        padding: 14px 16px;
+      }
+      .side .heading {
+        font-size: 19px;
+      }
+      .side .body {
+        font-size: 15px;
+      }
+      .q {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .q span {
+        font:
+          700 13px/1 'Nunito App',
+          'Nunito',
+          sans-serif;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: var(--soft);
+        border: 1px solid var(--border);
+      }
+      .q span.run {
+        background: var(--accent);
+        color: var(--accent-ink);
+        border-color: var(--deep-terracotta);
+      }
+    </style>
+  </head>
+  <body class="light">
+    <h1 class="title">How Aer Remote talks to a dispenser</h1>
+    <div class="sub body">
+      Example: you tap “Spray now”. Connect on demand, do the work, let go.
+    </div>
+    <div class="layout">
+      <div class="seq">
+        <div class="life l"></div>
+        <div class="life r"></div>
+        <div class="heads">
+          <div class="actor">Phone · Aer Remote</div>
+          <div class="air">Bluetooth Low Energy</div>
+          <div class="actor dev">Dispenser</div>
+        </div>
+        <div class="msg">
+          <div class="note">Tap “Spray now”: the job joins this dispenser’s queue</div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Connect: up to 3 tries, 8 s each</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Subscribe to replies (…0001)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Set time, home time zone (mT 102)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow back"><span>Ack (mT 152, ack 200)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Fetch status (mT 107)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow back"><span>Status: battery, auto spray, counters</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Spray now (mT 104)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow back"><span>Ack (mT 154, ack 200)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow"><span>Fetch status again (mT 107)</span></div>
+        </div>
+        <div class="msg">
+          <div class="arrow back"><span>Status, saved and shown</span></div>
+        </div>
+        <div class="msg">
+          <div class="note muted">
+            10 s with nothing queued: disconnect, so other phones can connect
+          </div>
+        </div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <div class="heading">One queue per dispenser</div>
+          <div class="body">Jobs run one at a time. A new job resets the 10 s idle timer.</div>
+          <div class="q">
+            <span class="run">Spray now</span><span>Auto 20 min</span><span>Refresh</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="heading">Replies must match</div>
+          <div class="body">
+            A reply counts only with mT + 50 and the same mN. Other frames are ignored. No match in
+            3 s, or an ack other than 200, is an error, never a guess.
+          </div>
+        </div>
+        <div class="card">
+          <div class="heading">Let go early</div>
+          <div class="body">
+            When the app goes to the background, every connection closes. The dispenser takes one
+            phone at a time.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

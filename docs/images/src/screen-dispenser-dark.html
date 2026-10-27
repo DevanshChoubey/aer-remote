@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Design preview: Dispenser (dark)</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Nunito:wght@500;700&display=block"
+    />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <!-- Mirrors src/screens/dispenser/DispenserScreen.tsx with copy from src/i18n/en/dispenser.ts. -->
+  <body class="dark">
+    <div class="single">
+      <div class="phone">
+        <div class="screen">
+          <div class="camera"></div>
+          <div class="statusbar">
+            <span>4:15</span
+            ><span class="dots"><i></i><i></i><i></i><span class="bat"></span></span>
+          </div>
+          <div class="content">
+            <div class="title">Living room</div>
+            <div class="col g4">
+              <div class="btn ghost">Back</div>
+              <div class="btn primary">Spray now</div>
+              <div class="card">
+                <div class="row between g3">
+                  <span class="bold">Auto spray</span><span class="switch on"></span>
+                </div>
+                <div class="caption muted">Every 20 minutes</div>
+                <div class="row g2 wrap">
+                  <span class="chip">10 min</span><span class="chip on">20 min</span
+                  ><span class="chip">40 min</span>
+                </div>
+              </div>
+              <div class="card">
+                <div class="heading">Status</div>
+                <div class="col g2">
+                  <div class="row g2 wrap">
+                    <span class="badge ok">Battery 86%</span>
+                    <span class="badge ok">Refill 64%</span>
+                  </div>
+                  <div class="caption muted">Last checked just now</div>
+                  <div class="caption muted">Firmware 1.0.0</div>
+                </div>
+                <div class="btn secondary">I refilled it</div>
+              </div>
+              <div class="card">
+                <div class="heading">Schedules</div>
+                <div class="col g3">
+                  <div class="col g1 item">
+                    <span class="bold">Weekdays, 8:00 AM to 8:00 PM, every 20 min</span>
+                    <span class="caption muted">About 36 sprays a day</span>
+                  </div>
+                  <div class="col g1 item">
+                    <span class="bold">Weekends, 10:00 AM to 10:00 PM, every 40 min</span>
+                    <span class="caption muted">About 18 sprays a day</span>
+                  </div>
+                  <div class="btn secondary"><span>+</span><span>Add schedule</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="preview-label"><b>Design preview</b> · dark theme, from the app's tokens</div>
+    </div>
+  </body>
+</html>

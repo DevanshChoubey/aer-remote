@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Design preview: Schedule editor</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Nunito:wght@500;700&display=block"
+    />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <!-- Mirrors src/screens/schedule/ScheduleEditor.tsx and TimeStepper.tsx with copy from src/i18n/en/schedule.ts. -->
+  <body class="light">
+    <div class="single">
+      <div class="phone">
+        <div class="screen">
+          <div class="camera"></div>
+          <div class="statusbar">
+            <span>4:15</span
+            ><span class="dots"><i></i><i></i><i></i><span class="bat"></span></span>
+          </div>
+          <div class="content">
+            <div class="title">Edit schedule</div>
+            <div class="col g4">
+              <div class="card">
+                <div class="col g2">
+                  <span class="bold">Start time</span>
+                  <div class="row between g4">
+                    <div class="row g2"><span class="step">−</span><span class="step">+</span></div>
+                    <span class="heading">8:00 AM</span>
+                    <div class="row g2"><span class="step">−</span><span class="step">+</span></div>
+                  </div>
+                </div>
+                <div class="col g2">
+                  <span class="bold">End time</span>
+                  <div class="row between g4">
+                    <div class="row g2"><span class="step">−</span><span class="step">+</span></div>
+                    <span class="heading">8:00 PM</span>
+                    <div class="row g2"><span class="step">−</span><span class="step">+</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <span class="bold">Days</span>
+                <div class="row g2 wrap">
+                  <span class="chip">Every day</span><span class="chip on">Weekdays</span
+                  ><span class="chip">Weekends</span>
+                </div>
+                <div class="row g2 wrap">
+                  <span class="chip on">Mon</span><span class="chip on">Tue</span
+                  ><span class="chip on">Wed</span><span class="chip on">Thu</span
+                  ><span class="chip on">Fri</span><span class="chip">Sat</span
+                  ><span class="chip">Sun</span>
+                </div>
+              </div>
+              <div class="card">
+                <span class="bold">Spray every</span>
+                <div class="row g2 wrap">
+                  <span class="chip">10 min</span><span class="chip on">20 min</span
+                  ><span class="chip">40 min</span>
+                </div>
+              </div>
+              <span class="body muted">About 36 sprays a day</span>
+              <div class="btn primary">Save schedule</div>
+              <div class="btn secondary">Delete schedule</div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="preview-label"><b>Design preview</b> · built from the app's tokens and copy</div>
+    </div>
+  </body>
+</html>
