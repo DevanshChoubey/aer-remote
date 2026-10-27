@@ -14,7 +14,7 @@ const rnVisualRestriction = {
 };
 
 const SERVICE_MODULES = ['protocol', 'device', 'store', 'ble'];
-const DOMAIN_FOLDERS = ['core', 'protocol', 'device', 'store', 'ble'];
+const DOMAIN_FOLDERS = ['core', 'protocol', 'device', 'store', 'ble', 'alerts'];
 
 const serviceImports = SERVICE_MODULES.flatMap((m) => [
   {
@@ -88,7 +88,7 @@ module.exports = [
   },
   // Protocol and device logic stay pure TypeScript so they run in plain Jest and Node.
   {
-    files: ['src/protocol/**', 'src/device/**'],
+    files: ['src/protocol/**', 'src/device/**', 'src/alerts/plan.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -108,7 +108,8 @@ module.exports = [
                 'expo/**',
                 '@react-native-async-storage/*',
               ],
-              message: 'src/protocol and src/device must stay free of React Native and Expo.',
+              message:
+                'src/protocol, src/device and src/alerts/plan.ts must stay free of React Native and Expo.',
             },
           ],
         },

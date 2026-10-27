@@ -5,6 +5,7 @@ const path = require('path');
 module.exports = {
   preset: 'jest-expo',
   testMatch: ['<rootDir>/tests/**/*.test.ts', '<rootDir>/tests/**/*.test.tsx'],
+  setupFiles: ['<rootDir>/tests/setup/expoNotifications.ts'],
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts'],
   coverageThreshold: Object.fromEntries(

@@ -3,10 +3,13 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 import { createFakeTransport } from '@/ble/testing/fakeDispenser';
 import { createServices, useServices } from '@/core';
+import { useAlertOpen } from '@/screens/useAlertOpen';
 import { useThemePreference } from '@/theme';
 import { AppProviders } from '@/screens/AppProviders';
 import { createMemoryStore } from '@/store/memoryStore';
 import { Button, Txt } from '@/ui';
+
+import { fakeAlerts } from './alertsHarness';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -26,7 +29,15 @@ function Probe(): React.JSX.Element {
   return <Txt>ready</Txt>;
 }
 
-const services = createServices({ transport: createFakeTransport({}), store: createMemoryStore() });
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+}));
+
+const store = createMemoryStore();
+const { alerts, scheduler } = fakeAlerts(store);
+const services = createServices({ transport: createFakeTransport({}), store, alerts });
 const tree = (): React.JSX.Element => (
   <AppProviders services={services}>
     <Probe />
@@ -127,5 +138,79 @@ describe('AppProviders', () => {
       listen.mockRestore();
       closeAll.mockRestore();
     }
+  });
+
+  it('resyncs alerts, without asking, when the app comes back to the foreground', async () => {
+    let handler: (s: AppStateStatus) => void = () => undefined;
+    const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((type, cb) => {
+      if (type === 'change') handler = cb as (s: AppStateStatus) => void;
+      return { remove: jest.fn() };
+    });
+    const sync = jest.spyOn(services.alerts, 'sync');
+    try {
+      await render(tree());
+      sync.mockClear();
+      await act(async () => handler('background'));
+      expect(sync).not.toHaveBeenCalled();
+      await act(async () => handler('active'));
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(sync).toHaveBeenCalledWith({ mayAsk: false });
+    } finally {
+      listen.mockRestore();
+      sync.mockRestore();
+    }
+  });
+
+  it('starts alerts once and stops on unmount', async () => {
+    const listen = jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+    const stop = jest.fn();
+    const start = jest.spyOn(services.alerts, 'start').mockReturnValue(stop);
+    try {
+      const { unmount } = await render(tree());
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(stop).not.toHaveBeenCalled();
+      await act(async () => unmount());
+      expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+      start.mockRestore();
+      listen.mockRestore();
+    }
+  });
+});
+
+function Links(): null {
+  useAlertOpen();
+  return null;
+}
+
+describe('useAlertOpen', () => {
+  beforeEach(() => {
+    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+    mockPush.mockClear();
+    mockReplace.mockClear();
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('opens the tapped dispenser', async () => {
+    await store.upsert({ id: 'kitchen', name: 'Kitchen', homeTimeZone: 'UTC' });
+    await render(
+      <AppProviders services={services}>
+        <Links />
+      </AppProviders>,
+    );
+    await act(async () => scheduler.tap('kitchen'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dispenser/kitchen'));
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('tap on a removed dispenser goes home', async () => {
+    await render(
+      <AppProviders services={services}>
+        <Links />
+      </AppProviders>,
+    );
+    await act(async () => scheduler.tap('gone'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

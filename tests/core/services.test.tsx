@@ -27,6 +27,13 @@ describe('services', () => {
     spy.mockRestore();
   });
 
+  it('builds alerts by default and uses injected ones', () => {
+    const base = { transport: createFakeTransport({}), store: createMemoryStore() };
+    expect(typeof createServices(base).alerts.start).toBe('function');
+    const alerts = createServices(base).alerts;
+    expect(createServices({ ...base, alerts }).alerts).toBe(alerts);
+  });
+
   it('useServices returns the injected services inside the provider', () => {
     const services = createServices({
       transport: createFakeTransport({}),

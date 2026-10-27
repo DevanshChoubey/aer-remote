@@ -12,6 +12,7 @@ import { stepTime } from '@/screens/schedule/useScheduleDraft';
 import { createMemoryStore } from '@/store/memoryStore';
 import type { SavedDispenser } from '@/store/types';
 import { ThemeProvider } from '@/theme';
+import { fakeAlerts } from './alertsHarness';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -61,6 +62,7 @@ async function mount(
   await store.upsert(saved);
   options.prep?.(store);
   const services: Services = {
+    alerts: fakeAlerts(store).alerts,
     store,
     client: new DispenserClient(fake, store, { scheduleGapMs: 0, connectAttempts: 1 }),
   };

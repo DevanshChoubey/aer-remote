@@ -1,3 +1,4 @@
+export type { Alerts, AlertPermission } from '@/alerts';
 export { createServices } from './createServices';
 export { ServicesProvider, useServices, type Services } from './services';
 export { DeviceError, type DeviceErrorCode } from '@/device/errors';

@@ -1,9 +1,11 @@
 import React, { createContext, useContext } from 'react';
 
+import type { Alerts } from '@/alerts';
 import type { DispenserClient } from '@/device/client';
 import type { DispenserStore } from '@/store/types';
 
 export interface Services {
+  alerts: Alerts;
   client: DispenserClient;
   store: DispenserStore;
 }

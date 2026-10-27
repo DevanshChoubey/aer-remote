@@ -82,7 +82,9 @@ remove the `INTERNET` permission through `plugins/withReleaseNoInternet.js` (deb
 Metro), and location is never requested and is blocked in `app.json`. The one exception is debug builds
 on Android 11: release builds need Android 12 (`plugins/withReleaseMinSdk.js`), but debug builds install
 from Android 11 for the hardware test, and only there ask for precise location, which Android 11 needs to
-scan. The release manifest strips those location entries. No telemetry or analytics. Never log
+scan. The release manifest strips those location entries. Refill and battery alerts are local
+notifications only: release builds strip the Firebase push entries (`c2dm`, the Firebase messaging
+service and receiver), and iOS has no push entitlement. No telemetry or analytics. Never log
 device identifiers beyond what a debug screen shows the user.
 
 ## Accessibility

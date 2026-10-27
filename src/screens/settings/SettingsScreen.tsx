@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactElement } from 'react';
+import { Linking } from 'react-native';
 
 import { t } from '@/i18n';
 import { useThemePreference, type ThemePreference } from '@/theme';
-import { Card, Chip, Column, Input, Row, Screen, Touchable, Txt } from '@/ui';
+import { Button, Card, Chip, Column, Input, Row, Screen, Toggle, Touchable, Txt } from '@/ui';
 
 import { useSettings } from './useSettings';
 import { filterZones, listTimeZones, phoneZone, zonesFirst } from './zones';
@@ -21,7 +22,7 @@ const MAX_SHOWN = 50;
 export function SettingsScreen(): ReactElement {
   const router = useRouter();
   const { preference, setPreference } = useThemePreference();
-  const { dispensers, setZone, errorKey } = useSettings();
+  const { dispensers, setZone, errorKey, alertsOn, alertPermission, setAlertsOn } = useSettings();
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const zones = useMemo(() => listTimeZones(), []);
@@ -95,6 +96,30 @@ export function SettingsScreen(): ReactElement {
               />
             ))}
           </Row>
+        </Card>
+        <Card>
+          <Toggle
+            label={t('settings.alerts')}
+            value={alertsOn}
+            onChange={(on) => void setAlertsOn(on)}
+          />
+          <Txt variant="caption" color="muted">
+            {t('settings.alertsHint')}
+          </Txt>
+          {alertPermission === 'denied' ? (
+            <>
+              <Txt color="warn">{t('settings.alertsDenied')}</Txt>
+              <Button
+                variant="secondary"
+                label={t('settings.alertsOpenSettings')}
+                onPress={() => {
+                  Linking.openSettings().catch((e: unknown) =>
+                    console.warn('Could not open the phone settings', e),
+                  );
+                }}
+              />
+            </>
+          ) : null}
         </Card>
         <Card>
           <Txt variant="heading">{t('settings.dispensers')}</Txt>

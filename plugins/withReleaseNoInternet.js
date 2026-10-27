@@ -13,6 +13,13 @@ const RELEASE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
     <uses-permission-sdk-23 android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove"/>
     <uses-permission-sdk-23 android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove"/>
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" tools:node="remove"/>
+    <application>
+        <service android:name="expo.modules.notifications.service.ExpoFirebaseMessagingService" tools:node="remove"/>
+        <service android:name="com.google.firebase.messaging.FirebaseMessagingService" tools:node="remove"/>
+        <receiver android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver" tools:node="remove"/>
+    </application>
 </manifest>
 `;
 
