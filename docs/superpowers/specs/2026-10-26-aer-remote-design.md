@@ -45,8 +45,8 @@ and two open-source projects). Every command in v1 is documented there.
 - Desktop apps (Windows, macOS, Linux). **Phase 2**, but the architecture must allow them (see §6).
 - Store release and payments. Builds are installed directly for now (Android APK; iPhone via a dev
   build). Releasing is a later decision.
-- Push notifications for low battery/refill when the app is closed (needs background Bluetooth). v1
-  shows warnings when the app is opened.
+- Push notifications, and anything that needs background Bluetooth. Refill and battery alerts are
+  local and predicted instead; see `2026-10-27-refill-battery-alerts-design.md`.
 - Firmware updates (OTA), the vendor's provisioning (mT 101), preset schedules from Godrej's server,
   buying refills, accounts.
 - Home Assistant / voice-assistant integration.

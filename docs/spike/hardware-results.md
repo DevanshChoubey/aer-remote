@@ -43,6 +43,18 @@ because scanning there needs the location permission and the app never requests 
 
 If N on a platform: add a task for the native Expo module (spec section 8) before continuing.
 
+## Refill and battery alert assumptions
+
+Alerts predict the refill from `sC` (sprays since refill). Check these on the dispenser.
+
+| Check                                                      | Result (Y/N, note) |
+| ---------------------------------------------------------- | ------------------ |
+| `sC` goes up by one for every scheduled spray              |                    |
+| `sC` goes up by one for every auto-spray                   |                    |
+| `sC` goes up by one for every manual spray                 |                    |
+| Auto-spray runs all day at its interval, not only in hours |                    |
+| Schedule and auto-spray sprays add together in `sC`        |                    |
+
 ## Pass bar: 10 of 10 connect + fetch status within 5 s, at about 3 m
 
 | Platform | Passes (/10) | Distance | Connect times (ms), runs 1-10 |

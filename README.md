@@ -61,6 +61,7 @@ app should just work. Aer Remote aims to be that app:
 | Schedules          | Up to 10 per dispenser: start, end, days and interval. They run on the dispenser itself.      |
 | Read-back          | After each save the app reads the schedules back, so the list shows what the dispenser holds. |
 | Status             | Battery and refill level, firmware, and when the status was last checked.                     |
+| Alerts             | Refill and battery notifications. The refill time is an estimate, not a reading.              |
 | Refill reset       | Tap "I refilled it" after you put in a new can.                                               |
 | Correct clock      | Sets the dispenser's clock on every connection, in the dispenser's home time zone.            |
 | Several dispensers | Add, name, find (blink its light), rename and remove. One per room is fine.                   |
