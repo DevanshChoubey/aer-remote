@@ -122,7 +122,7 @@ export function AddScreen(): ReactElement {
           <Txt variant="heading">{t('add.found')}</Txt>
           <Txt color="muted">{t('add.blinkHint')}</Txt>
           {scan.devices.map((d) => {
-            const label = t('add.deviceName', { n: d.n });
+            const label = t('add.deviceName', { name: d.name ?? t('add.unnamed'), n: d.n });
             return (
               <Card key={d.id}>
                 <Txt variant="bodyBold">{label}</Txt>

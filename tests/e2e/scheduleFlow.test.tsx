@@ -92,7 +92,7 @@ describe('add, schedule, spray, home', () => {
 
     // Add
     await fireEvent.press(await screen.findByLabelText('Add dispenser'));
-    await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Choose Smart Matic 1'));
     await fireEvent.press(await screen.findByLabelText('Save dispenser'));
 
     // Pin the dispenser to UTC so the expected time does not depend on the machine's zone

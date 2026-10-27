@@ -128,7 +128,10 @@ export function wrapDevice(manager: BleManager, device: Device): BleConnection {
   return {
     deviceId: id,
     async characteristics(): Promise<BleCharacteristic[]> {
-      const list = await device.characteristicsForService(SERVICE_UUID);
+      const list = await device.characteristicsForService(SERVICE_UUID).catch((e: unknown) => {
+        // Scans list every device, so the user can pick one that is not a dispenser.
+        throw errorCodeOf(e) === BleErrorCode.ServiceNotFound ? new DeviceError('notDispenser') : e;
+      });
       return list.map((c) => ({
         uuid: c.uuid.toLowerCase(),
         // Writes are always without response, so only that property counts.
@@ -210,7 +213,7 @@ export function createRnTransport(
       return Platform.OS === 'android' ? androidRequestPermissions() : Promise.resolve(true);
     },
 
-    scan(onFound, timeoutMs, opts): { stop(): void; done: Promise<void> } {
+    scan(onFound, timeoutMs): { stop(): void; done: Promise<void> } {
       const m = mgr();
       let finish: () => void = () => undefined;
       let fail: (e: Error) => void = () => undefined;
@@ -226,29 +229,27 @@ export function createRnTransport(
         m.stopDeviceScan().then(finish, fail);
       };
       const timer = setTimeout(stop, timeoutMs);
-      m.startDeviceScan(
-        opts?.unfiltered ? null : [SERVICE_UUID],
-        { allowDuplicates: false },
-        async (error, device) => {
-          if (error) {
-            if (!stopped) {
-              stopped = true;
-              clearTimeout(timer);
-              m.stopDeviceScan().catch(() => undefined);
-              fail(scanError(error));
-            }
-            return;
+      // No native filter: a real Smart Matic does not advertise its service (hardware test,
+      // 2026-10-27). Every device is listed, and adding one checks for the service.
+      m.startDeviceScan(null, { allowDuplicates: false }, async (error, device) => {
+        if (error) {
+          if (!stopped) {
+            stopped = true;
+            clearTimeout(timer);
+            m.stopDeviceScan().catch(() => undefined);
+            fail(scanError(error));
           }
-          if (device && !stopped) {
-            const found: FoundDevice = {
-              id: device.id,
-              name: device.name ?? device.localName ?? null,
-              rssi: device.rssi,
-            };
-            onFound(found);
-          }
-        },
-      ).catch((e: unknown) => {
+          return;
+        }
+        if (device && !stopped) {
+          const found: FoundDevice = {
+            id: device.id,
+            name: device.name ?? device.localName ?? null,
+            rssi: device.rssi,
+          };
+          onFound(found);
+        }
+      }).catch((e: unknown) => {
         stopped = true;
         clearTimeout(timer);
         m.stopDeviceScan().catch(() => undefined);

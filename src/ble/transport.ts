@@ -30,11 +30,7 @@ export interface BleConnection {
 export interface BleTransport {
   adapterState(): Promise<AdapterState>;
   requestPermissions(): Promise<boolean>;
-  /** `unfiltered` scans without the aer service filter (diagnostics only). */
-  scan(
-    onFound: (d: FoundDevice) => void,
-    timeoutMs: number,
-    opts?: { unfiltered?: boolean },
-  ): { stop(): void; done: Promise<void> };
+  /** Reports every nearby device; a real dispenser does not advertise its service. */
+  scan(onFound: (d: FoundDevice) => void, timeoutMs: number): { stop(): void; done: Promise<void> };
   connect(deviceId: string, timeoutMs: number): Promise<BleConnection>;
 }
