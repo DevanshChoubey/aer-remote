@@ -165,6 +165,16 @@ From AerControl:
 | `sC`  | Spray counters (`sn`, `sc`, `bn`).                                                                |
 | `sV`  | Structure version.                                                                                |
 
+Seen on firmware 3.0.8-IN (see `docs/spike/hardware-results.md`):
+
+- `cS` 11x is auto-spray. 12x means a schedule window is running, and its last digit is the
+  schedule's interval, not the auto-spray one: with auto-spray at 10 min and a 20 min schedule, `cS`
+  read 122.
+- `sC.sn[0]` counts manual sprays and `sC.sn[1]` auto sprays; turning auto-spray on sprays once at
+  once. `sC.sc[i]` counts the sprays of schedule slot `i`.
+- When a schedule window starts, auto-spray stops and stays off after the window (`cS` 0).
+- A schedule sprays at its end time too: 18:50 to 19:50 every 20 min sprayed 4 times.
+
 The refill estimate assumes 2200 sprays per can.
 
 ## Not in the device
