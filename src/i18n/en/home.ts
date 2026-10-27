@@ -5,6 +5,7 @@ export default {
   addDispenser: 'Add dispenser',
   nextSpray: 'Next spray {time}',
   noSchedule: 'No schedule today',
+  doneForToday: 'Done for today',
   lastSeen: 'Last updated {when}',
   openDispenser: 'Open {name}',
   settings: 'Settings',

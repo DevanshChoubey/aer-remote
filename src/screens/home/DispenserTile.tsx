@@ -5,6 +5,7 @@ import {
   isBatteryTooLow,
   nextSprayToday,
   refillPercent,
+  runsToday,
   type SavedDispenser,
 } from '@/core';
 import { t } from '@/i18n';
@@ -30,7 +31,11 @@ export function DispenserTile({ dispenser, now, onOpen }: DispenserTileProps): R
   let nextLine: string | null = null;
   if (schedules) {
     const next = nextSprayToday(schedules.list, now, dispenser.homeTimeZone);
-    nextLine = next ? t('home.nextSpray', { time: formatTimeOfDay(next) }) : t('home.noSchedule');
+    nextLine = next
+      ? t('home.nextSpray', { time: formatTimeOfDay(next) })
+      : runsToday(schedules.list, now, dispenser.homeTimeZone)
+        ? t('home.doneForToday')
+        : t('home.noSchedule');
   }
   const checked = lastStatus
     ? t('home.lastChecked', { when: formatWhen(lastStatus.at, now) })
