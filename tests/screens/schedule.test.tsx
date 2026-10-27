@@ -253,15 +253,9 @@ describe('ScheduleEditor', () => {
     await screen.findByText(/^The dispenser rounded the end time to/);
     await fireEvent.press(screen.getByLabelText(/^Start time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText('Save schedule'));
-    await waitFor(() => expect(screen.queryByLabelText('Save schedule')).toBeTruthy());
-    // The second save rounds 20:00 down to 19:45; wait for its notice so the save has finished.
-    expect(
-      await screen.findByText(
-        /^The dispenser rounded the end time to 7:45/i,
-        {},
-        { timeout: 3000 },
-      ),
-    ).toBeTruthy();
+    // The second save rounds 20:00 down to 19:45. Its notice appears only once the save has
+    // finished, and Done then replaces Save, so wait on the notice, not on the Save button.
+    expect(await screen.findByText(/^The dispenser rounded the end time to 7:45/i)).toBeTruthy();
     expect(fake.state('a').schedules[0]?.start).toEqual({ h: 8, m: 5 });
     expect(fake.state('a').schedules).toHaveLength(1);
     await done(services);
