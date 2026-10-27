@@ -48,11 +48,12 @@
         }
       ],
       "./plugins/withReleaseNoInternet",
+      "./plugins/withReleaseMinSdk",
       [
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 31
+            "minSdkVersion": 30
           }
         }
       ]

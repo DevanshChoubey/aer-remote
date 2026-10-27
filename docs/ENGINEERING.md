@@ -79,7 +79,10 @@ Domain code throws typed errors (`DeviceError` and the like). Screens map them t
 
 No network calls anywhere. ESLint `no-restricted-globals: fetch` applies to every file. Release builds
 remove the `INTERNET` permission through `plugins/withReleaseNoInternet.js` (debug builds keep it for
-Metro), and location is never requested and is blocked in `app.json`. No telemetry or analytics. Never log
+Metro), and location is never requested and is blocked in `app.json`. The one exception is debug builds
+on Android 11: release builds need Android 12 (`plugins/withReleaseMinSdk.js`), but debug builds install
+from Android 11 for the hardware test, and only there ask for precise location, which Android 11 needs to
+scan. The release manifest strips those location entries. No telemetry or analytics. Never log
 device identifiers beyond what a debug screen shows the user.
 
 ## Accessibility

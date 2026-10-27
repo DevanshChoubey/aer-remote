@@ -1,7 +1,28 @@
 import { BleErrorCode, State, type BleManager, type Device } from 'react-native-ble-plx';
 
-import { createRnTransport, mapState, settledState, wrapDevice } from '@/ble/rnTransport';
+import {
+  androidPermissionsFor,
+  createRnTransport,
+  mapState,
+  settledState,
+  wrapDevice,
+} from '@/ble/rnTransport';
 import { DeviceError } from '@/device/errors';
+
+describe('androidPermissionsFor', () => {
+  it('asks Android 12 and later for the Bluetooth permissions only', () => {
+    expect(androidPermissionsFor(31)).toEqual([
+      'android.permission.BLUETOOTH_SCAN',
+      'android.permission.BLUETOOTH_CONNECT',
+    ]);
+    expect(androidPermissionsFor(36)).not.toContain('android.permission.ACCESS_FINE_LOCATION');
+  });
+
+  // Only debug builds install on Android 11; scanning there needs precise location.
+  it('asks Android 11 for precise location', () => {
+    expect(androidPermissionsFor(30)).toEqual(['android.permission.ACCESS_FINE_LOCATION']);
+  });
+});
 
 describe('mapState', () => {
   it.each([
