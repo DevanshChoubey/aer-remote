@@ -76,15 +76,8 @@ const WEEKDAY_BY_SHORT: Record<string, Weekday> = {
   Sun: 'sun',
 };
 
-/**
- * The next spray at or after `now` (to the minute) on today's date in `timeZone`, or null when
- * none is left. Sprays run at start, start + interval, ... for `sprayCount` sprays.
- */
-export function nextSprayToday(
-  schedules: Schedule[],
-  now: Date,
-  timeZone: string,
-): TimeOfDay | null {
+/** Today's weekday and minute of the day in `timeZone`, or null for an unknown zone. */
+function localDayAndMinute(now: Date, timeZone: string): { today: Weekday; nowMin: number } | null {
   // Once a year the spring-forward gap or the repeated fall-back hour may show a time that does not
   // exist or appears twice; that is acceptable here.
   let parts: Intl.DateTimeFormatPart[];
@@ -103,10 +96,33 @@ export function nextSprayToday(
   const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
   const today = WEEKDAY_BY_SHORT[part('weekday')];
   if (!today) return null;
-  const nowMin = Number(part('hour')) * 60 + Number(part('minute'));
+  return { today, nowMin: Number(part('hour')) * 60 + Number(part('minute')) };
+}
+
+const runsOn = (s: Schedule, day: Weekday): boolean =>
+  s.days.includes(day) && validateSchedule(s).length === 0;
+
+/** Whether any valid schedule has sprays on today's date in `timeZone`, past or still to come. */
+export function runsToday(schedules: Schedule[], now: Date, timeZone: string): boolean {
+  const local = localDayAndMinute(now, timeZone);
+  return local !== null && schedules.some((s) => runsOn(s, local.today));
+}
+
+/**
+ * The next spray at or after `now` (to the minute) on today's date in `timeZone`, or null when
+ * none is left. Sprays run at start, start + interval, ... for `sprayCount` sprays.
+ */
+export function nextSprayToday(
+  schedules: Schedule[],
+  now: Date,
+  timeZone: string,
+): TimeOfDay | null {
+  const local = localDayAndMinute(now, timeZone);
+  if (!local) return null;
+  const { today, nowMin } = local;
   let best: number | null = null;
   for (const s of schedules) {
-    if (!s.days.includes(today) || validateSchedule(s).length > 0) continue;
+    if (!runsOn(s, today)) continue;
     const count = sprayCount(s);
     for (let k = 0; k < count; k += 1) {
       const at = minutes(s.start) + k * s.interval;

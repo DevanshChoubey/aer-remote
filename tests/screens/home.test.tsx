@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { createFakeTransport } from '@/ble/testing/fakeDispenser';
-import { createServices, ServicesProvider, type Services } from '@/core';
+import { createServices, ServicesProvider, type Services, type Weekday } from '@/core';
 import { ThemeProvider } from '@/theme';
 import { createMemoryStore } from '@/store/memoryStore';
 import type { SavedDispenser } from '@/store/types';
+import { DispenserTile } from '@/screens/home/DispenserTile';
 import { HomeScreen } from '@/screens/home/HomeScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -200,5 +201,46 @@ describe('HomeScreen', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('DispenserTile', () => {
+  // Monday 2026-10-26, 15:44 in Kolkata.
+  const afternoon = new Date('2026-10-26T10:14:00.000Z');
+  // 06:00-16:00 every 40 minutes: the last spray is at 15:20.
+  const daytime = {
+    start: { h: 6, m: 0 },
+    end: { h: 16, m: 0 },
+    interval: 40,
+  } as const;
+
+  async function renderTile(days: Weekday[]): Promise<void> {
+    await render(
+      <ThemeProvider scheme="light">
+        <DispenserTile
+          dispenser={{
+            ...kitchen,
+            schedules: { list: [{ ...daytime, days }], at: NOW },
+          }}
+          now={afternoon}
+          onOpen={() => undefined}
+        />
+      </ThemeProvider>,
+    );
+  }
+
+  it("says it is done for today once today's sprays have all passed", async () => {
+    await renderTile(['mon']);
+    expect(screen.getByText('Done for today')).toBeTruthy();
+    expect(screen.queryByText('No schedule today')).toBeNull();
+    expect(screen.getByLabelText(/^Open Kitchen/).props.accessibilityLabel).toMatch(
+      /Done for today/,
+    );
+  });
+
+  it('says there is no schedule when nothing runs today', async () => {
+    await renderTile(['tue']);
+    expect(screen.getByText('No schedule today')).toBeTruthy();
+    expect(screen.queryByText('Done for today')).toBeNull();
   });
 });

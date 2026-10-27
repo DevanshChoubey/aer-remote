@@ -2,6 +2,7 @@ import {
   decodeScheduleEntry,
   encodeScheduleEntry,
   nextSprayToday,
+  runsToday,
   sprayCount,
   validateSchedule,
   type Schedule,
@@ -132,5 +133,28 @@ describe('nextSprayToday', () => {
 
   it('returns null for an unknown time zone', () => {
     expect(nextSprayToday([morning], at('2026-10-26T02:10:00Z'), 'Not/AZone')).toBeNull();
+  });
+});
+
+describe('runsToday', () => {
+  // 2026-10-26 is a Monday.
+  const morning: Schedule = {
+    start: { h: 8, m: 0 },
+    end: { h: 9, m: 0 },
+    days: ['mon'],
+    interval: 20,
+  };
+
+  it('is true on a scheduled day even after the last spray', () => {
+    // 10:30 in Kolkata, after the 08:40 spray.
+    expect(runsToday([morning], new Date('2026-10-26T05:00:00Z'), 'Asia/Kolkata')).toBe(true);
+  });
+
+  it('is false on an unscheduled day, for invalid schedules and for an unknown zone', () => {
+    const now = new Date('2026-10-26T05:00:00Z');
+    expect(runsToday([morning], new Date('2026-10-27T05:00:00Z'), 'Asia/Kolkata')).toBe(false);
+    expect(runsToday([{ ...morning, end: { h: 7, m: 0 } }], now, 'Asia/Kolkata')).toBe(false);
+    expect(runsToday([], now, 'Asia/Kolkata')).toBe(false);
+    expect(runsToday([morning], now, 'Not/AZone')).toBe(false);
   });
 });
