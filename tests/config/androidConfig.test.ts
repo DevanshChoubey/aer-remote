@@ -10,6 +10,12 @@ interface Plugin {
   RELEASE_MANIFEST: string;
 }
 
+interface SigningPlugin {
+  (config: Record<string, unknown>): Record<string, unknown>;
+  addReleaseSigning: (buildGradle: string) => string;
+  SIGNING_VARS: string[];
+}
+
 interface MinSdkPlugin {
   (config: Record<string, unknown>): Record<string, unknown>;
   addReleaseMinSdk: (buildGradle: string) => string;
@@ -20,6 +26,8 @@ interface MinSdkPlugin {
 const plugin = require('../../plugins/withReleaseNoInternet.js') as Plugin;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const minSdkPlugin = require('../../plugins/withReleaseMinSdk.js') as MinSdkPlugin;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const signingPlugin = require('../../plugins/withReleaseSigning.js') as SigningPlugin;
 
 const appJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8')) as {
   expo: { android: { blockedPermissions: string[] }; plugins: unknown[] };
@@ -41,6 +49,7 @@ describe('Android config', () => {
   it('registers the release plugins, with minSdk 30 for debug builds only', () => {
     expect(appJson.expo.plugins).toContain('./plugins/withReleaseNoInternet');
     expect(appJson.expo.plugins).toContain('./plugins/withReleaseMinSdk');
+    expect(appJson.expo.plugins).toContain('./plugins/withReleaseSigning');
     expect(appJson.expo.plugins).toContainEqual([
       'expo-build-properties',
       { android: { minSdkVersion: 30 } },
@@ -116,5 +125,41 @@ describe('release manifest push stripping', () => {
         new RegExp(`android:name="${name.replace(/\./g, '\\.')}"[^>]*tools:node="remove"`),
       );
     }
+  });
+});
+
+describe('withReleaseSigning', () => {
+  const gradle = 'android {\n    buildTypes {}\n}\n';
+
+  it('signs release builds with the upload key when its variables are set', () => {
+    const out = signingPlugin.addReleaseSigning(gradle);
+    expect(out.startsWith(gradle)).toBe(true);
+    expect(signingPlugin.SIGNING_VARS).toEqual([
+      'AER_UPLOAD_STORE_FILE',
+      'AER_UPLOAD_STORE_PASSWORD',
+      'AER_UPLOAD_KEY_ALIAS',
+      'AER_UPLOAD_KEY_PASSWORD',
+    ]);
+    for (const name of signingPlugin.SIGNING_VARS) expect(out).toContain(`'${name}'`);
+    expect(out).toContain(
+      'android.buildTypes.release.signingConfig = android.signingConfigs.aerUpload',
+    );
+  });
+
+  it('keeps the debug key when the variables are missing', () => {
+    expect(signingPlugin.addReleaseSigning(gradle)).toMatch(/if \(aerSigning\.every \{ it \}\)/);
+  });
+
+  it('adds the block once and holds no secrets', () => {
+    const once = signingPlugin.addReleaseSigning(gradle);
+    expect(signingPlugin.addReleaseSigning(once)).toBe(once);
+    expect(once).not.toMatch(/storePassword\s+['"]/);
+  });
+
+  it('adds an app build.gradle mod to the config', () => {
+    const config = signingPlugin({ name: 'x', slug: 'x' }) as {
+      mods?: { android?: { appBuildGradle?: unknown } };
+    };
+    expect(typeof config.mods?.android?.appBuildGradle).toBe('function');
   });
 });
