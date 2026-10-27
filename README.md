@@ -9,7 +9,8 @@ can spray on demand, turn auto spray on or off, set up to 10 spray schedules and
 and refill level. It works fully offline, needs no account and runs on iOS and Android.
 
 **Status: v1, awaiting hardware test.** The code is complete and tested against a simulated
-dispenser, but it has not yet run on a real one. See [Project status](#project-status-and-roadmap).
+dispenser. It has run on one Android phone with a real dispenser, but the full hardware test is not
+yet recorded. See [Project status](#project-status-and-roadmap).
 
 Works with the Godrej aer Smart Matic. Unofficial; not affiliated with or endorsed by Godrej.
 
