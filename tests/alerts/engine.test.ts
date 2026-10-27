@@ -210,6 +210,47 @@ describe('alert engine', () => {
     expect(await t.alerts.permission()).toBe('denied');
   });
 
+  it('asks on its own only once, even when the phone could ask again', async () => {
+    const storage = memoryStorage();
+    const t = setup({ storage });
+    // Refused, but the phone still lets the app ask (Android 13+ after one refusal).
+    t.scheduler.answer = 'undetermined';
+    await t.store.upsert(dispenser({ spraysSinceRefill: 1900 }));
+    await t.alerts.sync({ mayAsk: true });
+    await t.alerts.sync({ mayAsk: true });
+    expect(t.scheduler.requestCount).toBe(1);
+    expect(t.scheduler.scheduled.size).toBe(0);
+
+    // A later launch on the same saved state does not ask either.
+    const next = setup({ storage });
+    await next.store.upsert(dispenser({ spraysSinceRefill: 1901 }));
+    await next.alerts.sync({ mayAsk: true });
+    expect(next.scheduler.requestCount).toBe(0);
+  });
+
+  it('turning the switch on asks again while the phone allows it', async () => {
+    const t = setup();
+    t.scheduler.answer = 'undetermined';
+    await t.store.upsert(dispenser({ spraysSinceRefill: 1900 }));
+    await t.alerts.sync({ mayAsk: true });
+    expect(t.scheduler.requestCount).toBe(1);
+    await t.alerts.setEnabled(false);
+    t.scheduler.answer = 'granted';
+    await t.alerts.setEnabled(true);
+    expect(t.scheduler.requestCount).toBe(2);
+    expect(t.scheduler.scheduled.size).toBeGreaterThan(0);
+  });
+
+  it('turning the switch on does not ask when the phone will not', async () => {
+    const t = setup();
+    t.scheduler.setPermission('denied');
+    await t.store.upsert(dispenser({ spraysSinceRefill: 1900 }));
+    await t.alerts.setEnabled(false);
+    await t.alerts.setEnabled(true);
+    expect(t.scheduler.requestCount).toBe(0);
+    expect(t.scheduler.scheduled.size).toBe(0);
+  });
+
   it('switching off cancels everything; switching on schedules again', async () => {
     const t = setup();
     t.scheduler.setPermission('granted');

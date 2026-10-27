@@ -21,10 +21,14 @@ export interface AlertStateStore {
   /** True unless the user has switched alerts off. */
   enabled(): Promise<boolean>;
   setEnabled(on: boolean): Promise<void>;
+  /** True once the app has asked for notification permission on its own. */
+  asked(): Promise<boolean>;
+  setAsked(): Promise<void>;
 }
 
 const STATE_KEY = 'aer.alerts.v1';
 const ENABLED_KEY = 'aer.alerts.enabled';
+const ASKED_KEY = 'aer.alerts.asked';
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -53,5 +57,15 @@ export function createAlertStateStore(storage: KeyValueStorage): AlertStateStore
       }
     },
     setEnabled: (on) => storage.setItem(ENABLED_KEY, on ? 'true' : 'false'),
+    async asked() {
+      try {
+        return (await storage.getItem(ASKED_KEY)) === 'true';
+      } catch (e) {
+        // Unreadable: the phone still limits how often the prompt shows, so asking again is safe.
+        console.warn('Could not read whether the app asked for notifications', e);
+        return false;
+      }
+    },
+    setAsked: () => storage.setItem(ASKED_KEY, 'true'),
   };
 }

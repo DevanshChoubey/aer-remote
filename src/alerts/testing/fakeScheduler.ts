@@ -3,11 +3,13 @@ import type { AlertPermission, AlertScheduler, ScheduledAlert } from '../schedul
 export interface FakeScheduler extends AlertScheduler {
   scheduled: Map<string, ScheduledAlert>;
   setPermission(p: AlertPermission): void;
+  /** What the next prompt answers. 'undetermined' models a refusal the phone may ask about again. */
+  answer: AlertPermission;
   requestCount: number;
   tap(dispenserId: string): void;
 }
 
-/** In-memory scheduler. A requested permission is granted unless the test set it to denied. */
+/** In-memory scheduler. A prompt (while askable) answers `answer`, granted unless a test changes it. */
 export function createFakeScheduler(now: () => Date): FakeScheduler {
   const scheduled = new Map<string, ScheduledAlert>();
   const listeners = new Set<(dispenserId: string) => void>();
@@ -15,6 +17,7 @@ export function createFakeScheduler(now: () => Date): FakeScheduler {
   const fake: FakeScheduler = {
     scheduled,
     requestCount: 0,
+    answer: 'granted',
     setPermission(p) {
       current = p;
     },
@@ -26,7 +29,7 @@ export function createFakeScheduler(now: () => Date): FakeScheduler {
     },
     async requestPermission() {
       fake.requestCount += 1;
-      if (current === 'undetermined') current = 'granted';
+      if (current === 'undetermined') current = fake.answer;
       return current;
     },
     async pendingKeys() {

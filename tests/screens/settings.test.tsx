@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Linking } from 'react-native';
 
 import { createFakeTransport, type FakeTransport } from '@/ble/testing/fakeDispenser';
-import { ServicesProvider, type Services } from '@/core';
+import { ServicesProvider, type AlertPermission, type Services } from '@/core';
 import { DispenserClient } from '@/device/client';
 import { SettingsScreen } from '@/screens/settings/SettingsScreen';
 import { filterZones, listTimeZones, zonesFirst } from '@/screens/settings/zones';
@@ -28,7 +28,7 @@ jest.mock('expo-router', () => ({
 
 async function mount(
   onPreferenceChange = jest.fn(),
-  permission?: 'denied',
+  permission?: AlertPermission,
 ): Promise<{
   fake: FakeTransport;
   services: Services;
@@ -138,6 +138,14 @@ describe('SettingsScreen alerts', () => {
 
   it('hides the denied line when notifications are allowed', async () => {
     await mount();
+    await screen.findByLabelText('Refill and battery alerts');
+    expect(screen.queryByText(/Notifications are off/)).toBeNull();
+    expect(screen.queryByLabelText('Open phone settings')).toBeNull();
+  });
+
+  it('shows no denied line while the phone can still ask', async () => {
+    // A refusal Android 13+ will ask about again: turning the switch on asks, so no hint.
+    await mount(jest.fn(), 'undetermined');
     await screen.findByLabelText('Refill and battery alerts');
     expect(screen.queryByText(/Notifications are off/)).toBeNull();
     expect(screen.queryByLabelText('Open phone settings')).toBeNull();

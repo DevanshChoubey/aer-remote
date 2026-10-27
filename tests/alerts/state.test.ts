@@ -50,4 +50,26 @@ describe('alert state store', () => {
     await store.setEnabled(true);
     expect(await store.enabled()).toBe(true);
   });
+
+  it('remembers that the app asked for permission', async () => {
+    const storage = memoryStorage();
+    const store = createAlertStateStore(storage);
+    expect(await store.asked()).toBe(false);
+    await store.setAsked();
+    expect(storage.data.get('aer.alerts.asked')).toBe('true');
+    expect(await createAlertStateStore(storage).asked()).toBe(true);
+  });
+
+  it('treats an unreadable asked flag as not asked', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const store = createAlertStateStore({
+      getItem: async () => {
+        throw new Error('disk');
+      },
+      setItem: async () => undefined,
+    });
+    expect(await store.asked()).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

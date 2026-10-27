@@ -37,9 +37,13 @@ function ensureChannel(): Promise<unknown> {
   return channelReady;
 }
 
-function toPermission(status: string): AlertPermission {
-  if (status === 'granted') return 'granted';
-  return status === 'denied' ? 'denied' : 'undetermined';
+/**
+ * Askable counts as undetermined: Android 13+ reports 'denied' before the app ever asked, and
+ * still lets it ask after one refusal. Denied means the phone will not show the prompt again.
+ */
+function toPermission(r: Notifications.NotificationPermissionsStatus): AlertPermission {
+  if (r.status === Notifications.PermissionStatus.GRANTED) return 'granted';
+  return r.canAskAgain ? 'undetermined' : 'denied';
 }
 
 function dispenserIdOf(response: Notifications.NotificationResponse | null): string | undefined {
@@ -52,10 +56,10 @@ export function createExpoScheduler(): AlertScheduler {
   ensureHandler();
   return {
     async permission() {
-      return toPermission((await Notifications.getPermissionsAsync()).status);
+      return toPermission(await Notifications.getPermissionsAsync());
     },
     async requestPermission() {
-      return toPermission((await Notifications.requestPermissionsAsync()).status);
+      return toPermission(await Notifications.requestPermissionsAsync());
     },
     async pendingKeys() {
       const all = await Notifications.getAllScheduledNotificationsAsync();

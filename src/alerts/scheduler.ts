@@ -1,3 +1,4 @@
+/** 'undetermined' means the app may still ask; 'denied' means the phone will not show the prompt. */
 export type AlertPermission = 'granted' | 'denied' | 'undetermined';
 
 export interface ScheduledAlert {

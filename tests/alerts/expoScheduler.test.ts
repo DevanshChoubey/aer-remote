@@ -12,8 +12,8 @@ jest.mock('expo-notifications', () => ({
   getAllScheduledNotificationsAsync: jest.fn(async () => []),
   cancelScheduledNotificationAsync: jest.fn(async () => undefined),
   cancelAllScheduledNotificationsAsync: jest.fn(async () => undefined),
-  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined' })),
-  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined', canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true })),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   getLastNotificationResponseAsync: jest.fn(async () => null),
 }));
@@ -79,6 +79,28 @@ describe('createExpoScheduler', () => {
     const s = createExpoScheduler();
     expect(await s.permission()).toBe('undetermined');
     expect(await s.requestPermission()).toBe('granted');
+  });
+
+  it('counts a not-yet-asked Android 13 permission as askable', async () => {
+    // Android 13+ reports denied before POST_NOTIFICATIONS was ever requested.
+    mock.getPermissionsAsync.mockResolvedValueOnce({
+      status: 'denied',
+      canAskAgain: true,
+    } as never);
+    expect(await createExpoScheduler().permission()).toBe('undetermined');
+  });
+
+  it('counts denied as denied only when the phone will not ask again', async () => {
+    mock.getPermissionsAsync.mockResolvedValueOnce({
+      status: 'denied',
+      canAskAgain: false,
+    } as never);
+    expect(await createExpoScheduler().permission()).toBe('denied');
+    mock.requestPermissionsAsync.mockResolvedValueOnce({
+      status: 'denied',
+      canAskAgain: false,
+    } as never);
+    expect(await createExpoScheduler().requestPermission()).toBe('denied');
   });
 
   it('retries channel setup after a failure', async () => {

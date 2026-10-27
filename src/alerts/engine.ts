@@ -7,12 +7,15 @@ import type { AlertPermission, AlertScheduler } from './scheduler';
 import type { AlertState, AlertStateStore } from './state';
 
 export interface Alerts {
-  /** First sync (never asks), then a sync on every store change (may ask). Returns stop. */
+  /** First sync (never asks), then a sync on every store change (may ask once ever). Returns stop. */
   start(): () => void;
-  /** Runs one at a time. Never rejects: failures are logged and later syncs still run. */
+  /**
+   * Runs one at a time. Never rejects: failures are logged and later syncs still run. With mayAsk,
+   * asks for permission only if the app has never asked on its own before.
+   */
   sync(opts: { mayAsk: boolean }): Promise<void>;
   enabled(): Promise<boolean>;
-  /** Off cancels every pending alert; on syncs, and may ask for permission. */
+  /** Off cancels every pending alert; on syncs, and asks for permission if the phone allows. */
   setEnabled(on: boolean): Promise<void>;
   permission(): Promise<AlertPermission>;
   pendingKeys(): Promise<string[]>;
@@ -99,7 +102,11 @@ export function createAlerts(deps: AlertsDeps): Alerts {
     }
   };
 
-  const syncOnce = async (mayAsk: boolean): Promise<void> => {
+  /**
+   * 'auto' asks only if the app never asked on its own before; 'always' asks whenever the phone
+   * allows it (the user turned the switch on); 'never' does not ask.
+   */
+  const syncOnce = async (ask: 'never' | 'auto' | 'always'): Promise<void> => {
     if (!(await state.enabled())) return;
     const at = now();
     const dispensers = await store.list();
@@ -186,8 +193,11 @@ export function createAlerts(deps: AlertsDeps): Alerts {
 
     const scheduledKeys = new Set<string>();
     let permission = await scheduler.permission();
-    if (toSchedule.length > 0 && permission === 'undetermined' && mayAsk) {
-      permission = await scheduler.requestPermission();
+    if (toSchedule.length > 0 && permission === 'undetermined' && ask !== 'never') {
+      if (ask === 'always' || !(await state.asked())) {
+        await attempt('Could not save that the app asked', () => state.setAsked());
+        permission = await scheduler.requestPermission();
+      }
     }
     if (permission === 'granted') {
       for (const { alert, dispenser } of toSchedule) {
@@ -219,7 +229,8 @@ export function createAlerts(deps: AlertsDeps): Alerts {
     if (changed) await attempt('Could not save the alert state', () => state.save(delivered));
   };
 
-  const sync = ({ mayAsk }: { mayAsk: boolean }): Promise<void> => enqueue(() => syncOnce(mayAsk));
+  const sync = ({ mayAsk }: { mayAsk: boolean }): Promise<void> =>
+    enqueue(() => syncOnce(mayAsk ? 'auto' : 'never'));
 
   return {
     start() {
@@ -233,7 +244,7 @@ export function createAlerts(deps: AlertsDeps): Alerts {
     setEnabled: (on) =>
       enqueue(async () => {
         await attempt('Could not save the alerts switch', () => state.setEnabled(on));
-        if (on) await syncOnce(true);
+        if (on) await syncOnce('always');
         else {
           await attempt('Could not cancel alerts', () => scheduler.cancelAll());
           await attempt('Could not save the alert state', async () => {
