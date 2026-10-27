@@ -89,7 +89,8 @@ export function createExpoScheduler(): AlertScheduler {
       const handle = (r: Notifications.NotificationResponse | null): void => {
         const id = dispenserIdOf(r);
         if (!r || !id) return;
-        const key = `${r.notification.request.identifier}|${r.actionIdentifier}`;
+        // The delivery time tells apart two notifications that reuse one identifier.
+        const key = `${r.notification.request.identifier}|${r.actionIdentifier}|${r.notification.date}`;
         if (key === lastHandled) return;
         lastHandled = key;
         cb(id);

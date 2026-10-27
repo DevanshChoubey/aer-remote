@@ -110,7 +110,10 @@ describe('createExpoScheduler', () => {
 
   it('handles a cold-start tap once across subscriptions', async () => {
     const last = {
-      notification: { request: { identifier: 'n3', content: { data: { dispenserId: 'd3' } } } },
+      notification: {
+        date: 1000,
+        request: { identifier: 'n3', content: { data: { dispenserId: 'd3' } } },
+      },
       actionIdentifier: 'default',
     } as never;
     mock.getLastNotificationResponseAsync.mockResolvedValue(last);
@@ -123,5 +126,23 @@ describe('createExpoScheduler', () => {
     mock.addNotificationResponseReceivedListener.mock.calls[0]?.[0](last);
     expect(cb).toHaveBeenCalledTimes(1);
     mock.getLastNotificationResponseAsync.mockResolvedValue(null);
+  });
+
+  it('tells repeat taps of the same alert apart by delivery time', () => {
+    const cb = jest.fn();
+    createExpoScheduler().onOpen(cb);
+    const listener = mock.addNotificationResponseReceivedListener.mock.calls[0]?.[0];
+    const tap = (date: number) =>
+      ({
+        notification: {
+          date,
+          request: { identifier: 'd5:refillLow', content: { data: { dispenserId: 'd5' } } },
+        },
+        actionIdentifier: 'default',
+      }) as never;
+    listener?.(tap(1));
+    listener?.(tap(2));
+    listener?.(tap(2));
+    expect(cb).toHaveBeenCalledTimes(2);
   });
 });
