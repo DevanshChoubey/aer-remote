@@ -1,6 +1,6 @@
 import type { KeyValueStorage } from './asyncStorageStore';
 
-export type ThemePreferenceValue = 'system' | 'light' | 'dark';
+export type ThemePreferenceValue = 'system' | 'light' | 'dark' | 'slate';
 
 export interface ThemePreferenceStore {
   /** The saved preference; 'system' when nothing valid is saved. */
@@ -11,7 +11,7 @@ export interface ThemePreferenceStore {
 const KEY = 'aer.theme';
 
 const isPreference = (v: unknown): v is ThemePreferenceValue =>
-  v === 'system' || v === 'light' || v === 'dark';
+  v === 'system' || v === 'light' || v === 'dark' || v === 'slate';
 
 export function createThemePreferenceStore(storage: KeyValueStorage): ThemePreferenceStore {
   return {

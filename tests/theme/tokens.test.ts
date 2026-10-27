@@ -1,4 +1,4 @@
-import { darkTokens, lightTokens } from '@/theme';
+import { darkTokens, lightTokens, slateTokens } from '@/theme';
 import type { Tokens } from '@/theme';
 
 function keyPaths(value: unknown, prefix = ''): string[] {
@@ -34,11 +34,29 @@ describe('tokens', () => {
 
   it('dark tokens have the same keys as light tokens', () => {
     expect(keyPaths(darkTokens).sort()).toEqual(keyPaths(lightTokens).sort());
+    expect(keyPaths(slateTokens).sort()).toEqual(keyPaths(lightTokens).sort());
+  });
+
+  it('has the Night slate values from the design mockup', () => {
+    expect(slateTokens.color.bg).toBe('#10151c');
+    expect(slateTokens.color.surface).toBe('#1a222c');
+    expect(slateTokens.color.accent).toBe('#7fe0c4');
+    expect(slateTokens.radius.md).toBe(18);
+    expect(slateTokens.font).toEqual({
+      heading: 'Manrope_800ExtraBold',
+      body: 'Manrope_500Medium',
+      bodyBold: 'Manrope_700Bold',
+    });
+  });
+
+  it('marks which themes are dark', () => {
+    expect([lightTokens.dark, darkTokens.dark, slateTokens.dark]).toEqual([false, true, true]);
   });
 
   describe.each([
     ['light', lightTokens],
     ['dark', darkTokens],
+    ['slate', slateTokens],
   ] as [string, Tokens][])('%s contrast (WCAG AA)', (_name, tokens) => {
     const pairs: [keyof Tokens['color'], keyof Tokens['color']][] = [
       ['ink', 'bg'],

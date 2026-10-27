@@ -25,6 +25,13 @@ describe('theme preference store', () => {
     expect(await createThemePreferenceStore(memoryStorage()).load()).toBe('system');
   });
 
+  it('keeps the Night slate choice', async () => {
+    const storage = memoryStorage();
+    const prefs = createThemePreferenceStore(storage);
+    await prefs.save('slate');
+    expect(await prefs.load()).toBe('slate');
+  });
+
   it('saves under aer.theme and loads it back', async () => {
     const storage = memoryStorage();
     const prefs = createThemePreferenceStore(storage);

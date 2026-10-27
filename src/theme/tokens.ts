@@ -1,4 +1,6 @@
 export interface Tokens {
+  /** Dark backgrounds take light status bar icons. */
+  dark: boolean;
   color: {
     bg: string;
     stage: string;
@@ -49,6 +51,7 @@ const base = {
 
 export const lightTokens: Tokens = {
   ...base,
+  dark: false,
   color: {
     bg: '#fcf1de',
     stage: '#f4dfbd',
@@ -80,6 +83,7 @@ export const lightTokens: Tokens = {
 
 export const darkTokens: Tokens = {
   ...base,
+  dark: true,
   color: {
     bg: '#1e130d',
     stage: '#2a1b12',
@@ -113,3 +117,42 @@ export type ColorToken = keyof Tokens['color'];
 export type SpaceStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12;
 export type RadiusToken = keyof Tokens['radius'];
 export type ShadowToken = keyof Tokens['shadow'];
+
+/** Night slate (direction C in docs/design/visual-directions-mockup.html): dark slate, mint accent. */
+export const slateTokens: Tokens = {
+  ...base,
+  dark: true,
+  font: {
+    heading: 'Manrope_800ExtraBold',
+    body: 'Manrope_500Medium',
+    bodyBold: 'Manrope_700Bold',
+  },
+  radius: { sm: 10, md: 18, lg: 26, pill: 999 },
+  color: {
+    bg: '#10151c',
+    stage: '#070a0e',
+    surface: '#1a222c',
+    ink: '#eef3f8',
+    muted: '#8b9aab',
+    accent: '#7fe0c4',
+    accentInk: '#0b1a16',
+    soft: '#243040',
+    border: '#2b3746',
+    saffron: '#ffb86b',
+    deepTerracotta: '#7fe0c4',
+    warn: '#ffb86b',
+    warnSoft: '#3a2a18',
+    ok: '#7fe0c4',
+    okSoft: '#1d3a33',
+    track: '#6f7e90',
+  },
+  shadow: {
+    card: {
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      elevation: 0,
+    },
+  },
+};

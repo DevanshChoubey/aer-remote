@@ -20,6 +20,11 @@ describe('ThemeProvider status bar', () => {
     expect(mockStatusBar).toHaveBeenLastCalledWith({ style: 'light' });
   });
 
+  it('uses light icons on Night slate', async () => {
+    await render(<ThemeProvider initialPreference="slate">{null}</ThemeProvider>);
+    expect(mockStatusBar).toHaveBeenLastCalledWith({ style: 'light' });
+  });
+
   it('follows a saved preference over the system', async () => {
     await render(<ThemeProvider initialPreference="dark">{null}</ThemeProvider>);
     expect(mockStatusBar).toHaveBeenLastCalledWith({ style: 'light' });

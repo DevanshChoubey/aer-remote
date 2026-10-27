@@ -54,8 +54,12 @@ describe('SettingsScreen', () => {
   it('reports a theme choice', async () => {
     const onChange = jest.fn();
     await mount(onChange);
-    await fireEvent.press(await screen.findByLabelText('Dark'));
+    await fireEvent.press(await screen.findByLabelText('Warm dark'));
     expect(onChange).toHaveBeenCalledWith('dark');
+    await fireEvent.press(screen.getByLabelText('Night slate'));
+    expect(onChange).toHaveBeenCalledWith('slate');
+    expect(screen.getByLabelText('Warm light')).toBeTruthy();
+    expect(screen.getByLabelText('Match my phone')).toBeTruthy();
   });
 
   it('goes back', async () => {

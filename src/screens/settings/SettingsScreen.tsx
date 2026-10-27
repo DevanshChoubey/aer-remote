@@ -13,6 +13,7 @@ const THEMES: { value: ThemePreference; key: string }[] = [
   { value: 'system', key: 'settings.themeSystem' },
   { value: 'light', key: 'settings.themeLight' },
   { value: 'dark', key: 'settings.themeDark' },
+  { value: 'slate', key: 'settings.themeSlate' },
 ];
 
 const MAX_SHOWN = 50;
