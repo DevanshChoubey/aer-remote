@@ -33,6 +33,7 @@ function dispenser(
       batteryMv: over.batteryMv ?? 3000,
       firmware: '1',
       autoSpray: null,
+      scheduleRunning: false,
       spraysSinceRefill: over.spraysSinceRefill ?? 0,
     },
     schedules: { list: [everyDay], at: over.at ?? READING },

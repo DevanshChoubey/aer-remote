@@ -26,9 +26,19 @@ const DAY_BITS: [Weekday, number][] = [
 
 const minutes = (t: TimeOfDay): number => t.h * 60 + t.m;
 
-export function sprayCount(s: Schedule): number {
+/** The repeat count the device stores: whole intervals between start and end. */
+export function repeatCount(s: Schedule): number {
   const window = minutes(s.end) - minutes(s.start);
   return window > 0 ? Math.floor(window / s.interval) : 0;
+}
+
+/**
+ * Sprays a day: at start, every interval after it, and at the end when it lands on an interval
+ * (06:00-16:00 every 40 min is 16 sprays). Zero when the device would store no repeats.
+ */
+export function sprayCount(s: Schedule): number {
+  const repeats = repeatCount(s);
+  return repeats > 0 ? repeats + 1 : 0;
 }
 
 export function validateSchedule(s: Schedule): ScheduleProblem[] {
@@ -36,7 +46,7 @@ export function validateSchedule(s: Schedule): ScheduleProblem[] {
   if (minutes(s.end) <= minutes(s.start)) problems.push('endNotAfterStart');
   if (s.days.length === 0) problems.push('noDays');
   if (minutes(s.end) > minutes(s.start)) {
-    const count = sprayCount(s);
+    const count = repeatCount(s);
     if (count === 0) problems.push('noSprays');
     else if (count > 255) problems.push('tooManySprays');
   }
@@ -48,7 +58,7 @@ export function encodeScheduleEntry(s: Schedule): Uint8Array {
   if (problems.length > 0) throw new Error(`Invalid schedule: ${problems.join(', ')}`);
   let mask = 0;
   for (const [day, bit] of DAY_BITS) if (s.days.includes(day)) mask |= bit;
-  return new Uint8Array([mask, s.start.h, s.start.m, sprayCount(s), s.interval]);
+  return new Uint8Array([mask, s.start.h, s.start.m, repeatCount(s), s.interval]);
 }
 
 export function decodeScheduleEntry(b: Uint8Array): Schedule {

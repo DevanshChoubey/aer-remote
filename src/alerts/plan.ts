@@ -43,19 +43,30 @@ export function intoWindow(at: Date, now: Date, phoneTimeZone: string): Date {
   );
 }
 
-/** Sprays on a calendar day from minute `fromMin` on (0 for a whole day). */
-function spraysOnDay(dispenser: SavedDispenser, weekday: Weekday, fromMin: number): number {
-  let total = 0;
+/**
+ * Sprays on a calendar day from minute `fromMin` on (0 for a whole day), with auto-spray on while
+ * `autoOn`. A schedule window starting stops auto-spray for good, so `autoOn` comes back false then.
+ */
+function spraysOnDay(
+  dispenser: SavedDispenser,
+  weekday: Weekday,
+  fromMin: number,
+  autoOn: boolean,
+): { sprays: number; autoOn: boolean } {
+  let sprays = 0;
+  let firstStart: number | null = null;
   for (const s of dispenser.schedules?.list ?? []) {
     if (!s.days.includes(weekday) || validateSchedule(s).length > 0) continue;
     const start = s.start.h * 60 + s.start.m;
+    if (start >= fromMin && (firstStart === null || start < firstStart)) firstStart = start;
     for (let k = 0; k < sprayCount(s); k += 1) {
-      if (start + k * s.interval >= fromMin) total += 1;
+      if (start + k * s.interval >= fromMin) sprays += 1;
     }
   }
   const auto = dispenser.lastStatus?.autoSpray;
-  if (auto) total += Math.floor((1440 - fromMin) / auto);
-  return total;
+  if (!autoOn || !auto) return { sprays, autoOn: false };
+  sprays += Math.floor(((firstStart ?? 1440) - fromMin) / auto);
+  return { sprays, autoOn: firstStart === null };
 }
 
 /** Plans one alert per kind that applies to the dispenser's last reading. */
@@ -81,12 +92,15 @@ export function planAlerts({ dispenser, now, phoneTimeZone }: PlanInput): Planne
     ['refillOut', (p) => p === 0, false],
   ];
   let count = status.spraysSinceRefill;
+  let autoOn = status.autoSpray !== null;
   for (const c of crossings) c[2] = c[1](refillPercent(count));
   for (const [kind, , done] of crossings) if (done) add(kind, now);
   for (let day = 0; day <= MAX_DAYS_AHEAD + 1 && crossings.some((c) => !c[2]); day += 1) {
     const date = new Date(Date.UTC(home.year, home.month - 1, home.day + day));
     const weekday = WEEKDAYS[date.getUTCDay()] ?? 'sun';
-    count += spraysOnDay(dispenser, weekday, day === 0 ? home.minutes : 0);
+    const today = spraysOnDay(dispenser, weekday, day === 0 ? home.minutes : 0, autoOn);
+    count += today.sprays;
+    autoOn = today.autoOn;
     for (const c of crossings) {
       if (c[2] || !c[1](refillPercent(count))) continue;
       c[2] = true;

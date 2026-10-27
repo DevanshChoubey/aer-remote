@@ -31,6 +31,7 @@ function dispenser(
       batteryMv: status.batteryMv ?? 3000,
       firmware: '1',
       autoSpray: status.autoSpray ?? null,
+      scheduleRunning: false,
       spraysSinceRefill: status.spraysSinceRefill ?? 0,
     },
     schedules: { list: schedules, at: status.at },
@@ -55,7 +56,7 @@ describe('planAlerts', () => {
     const d = dispenser({ at: reading, spraysSinceRefill: 1900 }, [everyDay]);
     const alerts = planAlerts({ dispenser: d, now: new Date(reading), phoneTimeZone: KOLKATA });
     expect(iso(find(alerts, 'refillLow')?.at)).toBe(
-      new Date('2026-11-06T09:00:00+05:30').toISOString(),
+      new Date('2026-11-05T09:00:00+05:30').toISOString(),
     );
     expect(find(alerts, 'refillLow')?.key).toBe('abc:refillLow');
   });
@@ -63,9 +64,9 @@ describe('planAlerts', () => {
   it('refill out follows', () => {
     const d = dispenser({ at: reading, spraysSinceRefill: 1900 }, [everyDay]);
     const alerts = planAlerts({ dispenser: d, now: new Date(reading), phoneTimeZone: KOLKATA });
-    // Counts: 1918, 1942, 1966, 1990, 2014, 2038, 2062, 2086, 2110, 2134, 2158, 2182, 2206 (0%).
+    // 25 sprays a day, the one at 16:00 included: 1919, 1944, 1969, ..., 2169, 2194 (0%).
     expect(iso(find(alerts, 'refillOut')?.at)).toBe(
-      new Date('2026-11-14T09:00:00+05:30').toISOString(),
+      new Date('2026-11-13T09:00:00+05:30').toISOString(),
     );
   });
 
@@ -73,6 +74,37 @@ describe('planAlerts', () => {
     const d = dispenser({ at: reading, spraysSinceRefill: 1900, autoSpray: 40 });
     const alerts = planAlerts({ dispenser: d, now: new Date(reading), phoneTimeZone: KOLKATA });
     expect(find(alerts, 'refillLow')).toBeDefined();
+  });
+
+  it('auto-spray stops for good when the next schedule window starts', () => {
+    const wednesday: Schedule = {
+      start: { h: 8, m: 0 },
+      end: { h: 9, m: 0 },
+      days: ['wed'],
+      interval: 20,
+    };
+    const d = dispenser({ at: reading, spraysSinceRefill: 1900, autoSpray: 40 }, [wednesday]);
+    const alerts = planAlerts({ dispenser: d, now: new Date(reading), phoneTimeZone: KOLKATA });
+    // Auto: 21 on Monday from 10:00, 36 on Tuesday, 12 on Wednesday before 08:00, then none. The
+    // schedule adds 4 each Wednesday: 1921, 1957, 1973, then 1977, ..., 1993 (9%) on 9 December.
+    expect(iso(find(alerts, 'refillLow')?.at)).toBe(
+      new Date('2026-12-09T09:00:00+05:30').toISOString(),
+    );
+  });
+
+  it('a schedule window that ended before the reading does not stop auto-spray', () => {
+    const early: Schedule = {
+      start: { h: 6, m: 0 },
+      end: { h: 7, m: 0 },
+      days: ['mon'],
+      interval: 20,
+    };
+    const d = dispenser({ at: reading, spraysSinceRefill: 1900, autoSpray: 40 }, [early]);
+    const alerts = planAlerts({ dispenser: d, now: new Date(reading), phoneTimeZone: KOLKATA });
+    // 1921 on Monday, 1957 on Tuesday, 1993 (9%) on Wednesday.
+    expect(iso(find(alerts, 'refillLow')?.at)).toBe(
+      new Date('2026-11-04T09:00:00+05:30').toISOString(),
+    );
   });
 
   it('zero rate schedules no refill alert', () => {

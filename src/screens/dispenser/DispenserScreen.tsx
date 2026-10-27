@@ -118,7 +118,11 @@ export function DispenserScreen(): ReactElement {
             onChange={(on) => void v.setAutoSpray(on ? DEFAULT_AUTO : null)}
           />
           <Txt variant="caption" color="muted">
-            {auto === null ? t('dispenser.autoOff') : t('dispenser.autoEvery', { minutes: auto })}
+            {auto !== null
+              ? t('dispenser.autoEvery', { minutes: auto })
+              : lastStatus?.scheduleRunning
+                ? t('dispenser.autoOffScheduleRunning')
+                : t('dispenser.autoOff')}
           </Txt>
           <Row gap={2} wrap>
             {INTERVALS.map((n) => (

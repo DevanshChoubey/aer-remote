@@ -68,7 +68,7 @@ export type FakeTransport = BleTransport & {
 };
 
 const REPLY_OFFSET = 50;
-const AUTO_SPRAY_CODE: Record<Interval, number> = { 10: 121, 20: 122, 40: 123 };
+const AUTO_SPRAY_CODE: Record<Interval, number> = { 10: 112, 20: 113, 40: 114 };
 const NO_AUTO_SPRAY_CODE = 111;
 const DEFAULT_BATTERY_MV = 3000;
 const FIRMWARE = '1.0.0';

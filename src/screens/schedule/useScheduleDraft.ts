@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   MAX_SCHEDULES,
+  repeatCount,
   sprayCount,
   useServices,
   validateSchedule,
@@ -172,8 +173,8 @@ export function useScheduleDraft(id: string, index: number | undefined): Schedul
         at < 0 ? [...current, entry] : current.map((s, i) => (i === at ? entry : s)),
       );
       if (!readBack) return 'failed';
-      // The device stores a spray count, not an end, so it reads back start + count × interval.
-      const minutes = entry.start.h * 60 + entry.start.m + sprayCount(entry) * entry.interval;
+      // The device stores a repeat count, not an end, so it reads back start + count × interval.
+      const minutes = entry.start.h * 60 + entry.start.m + repeatCount(entry) * entry.interval;
       const normalized: Schedule = {
         ...entry,
         end: { h: Math.floor(minutes / 60), m: minutes % 60 },

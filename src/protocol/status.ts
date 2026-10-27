@@ -6,22 +6,16 @@ export interface DeviceStatus {
   batteryMv: number;
   firmware: string;
   autoSpray: Interval | null;
+  /** A schedule window is running; the dispenser stops auto-spray when one starts. */
+  scheduleRunning: boolean;
   spraysSinceRefill: number;
 }
 
 export const REFILL_SPRAYS = 2200;
 
-const AUTO_SPRAY: Record<number, Interval> = {
-  112: 10,
-  121: 10,
-  131: 10,
-  113: 20,
-  122: 20,
-  132: 20,
-  114: 40,
-  123: 40,
-  133: 40,
-};
+// `cS` 11x is auto-spray. 12x is a schedule window running, its last digit the schedule's interval.
+const AUTO_SPRAY: Record<number, Interval> = { 112: 10, 113: 20, 114: 40 };
+const SCHEDULE_RUNNING = new Set([121, 122, 123]);
 
 function sumNumbers(v: CborValue | undefined): number {
   if (typeof v === 'number') return v;
@@ -39,6 +33,7 @@ export function parseStatus(r: Reply): DeviceStatus {
     batteryMv: bV,
     firmware: typeof fV === 'string' ? fV : '',
     autoSpray: typeof cS === 'number' ? (AUTO_SPRAY[cS] ?? null) : null,
+    scheduleRunning: typeof cS === 'number' && SCHEDULE_RUNNING.has(cS),
     spraysSinceRefill: sumNumbers(sC),
   };
 }

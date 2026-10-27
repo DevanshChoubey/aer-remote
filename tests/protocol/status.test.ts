@@ -24,26 +24,41 @@ describe('status', () => {
     expect(parseStatus(r)).toEqual({
       batteryMv: 2506,
       firmware: '3.0.6-T1',
-      autoSpray: 20,
+      autoSpray: null,
+      scheduleRunning: true,
       spraysSinceRefill: 7,
     });
   });
 
-  it('maps auto-spray states', () => {
+  it('maps auto-spray states, which are only 11x', () => {
     const f = (cS: number): unknown => parseStatus(reply({ bV: 2600, cS })).autoSpray;
-    expect([111, 0, 112, 121, 131, 113, 122, 132, 114, 123, 133, 999].map(f)).toEqual([
+    expect([111, 0, 112, 113, 114, 121, 122, 123, 131, 132, 133, 999].map(f)).toEqual([
       null,
       null,
       10,
-      10,
-      10,
       20,
-      20,
-      20,
-      40,
-      40,
       40,
       null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it('reads 12x as a schedule window running', () => {
+    const f = (cS: number): unknown => parseStatus(reply({ bV: 2600, cS })).scheduleRunning;
+    expect([121, 122, 123, 111, 112, 0, 131, 999].map(f)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
     ]);
   });
 
@@ -52,6 +67,7 @@ describe('status', () => {
       batteryMv: 2600,
       firmware: '',
       autoSpray: null,
+      scheduleRunning: false,
       spraysSinceRefill: 0,
     });
     expect(
