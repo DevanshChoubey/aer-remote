@@ -9,6 +9,7 @@ import errors from '@/i18n/en/errors';
 import home from '@/i18n/en/home';
 import schedule from '@/i18n/en/schedule';
 import settings from '@/i18n/en/settings';
+import alerts from '@/i18n/en/alerts';
 
 const NAMESPACES: Record<string, Record<string, string>> = {
   common,
@@ -18,6 +19,7 @@ const NAMESPACES: Record<string, Record<string, string>> = {
   schedule,
   settings,
   errors,
+  alerts,
 };
 
 const ROOT = path.resolve(__dirname, '..');

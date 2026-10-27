@@ -1,4 +1,5 @@
 import add from './en/add';
+import alerts from './en/alerts';
 import common from './en/common';
 import dispenser from './en/dispenser';
 import errors from './en/errors';
@@ -14,6 +15,7 @@ const namespaces: Record<string, Record<string, string>> = {
   schedule,
   settings,
   errors,
+  alerts,
 };
 
 /** Dev: throws on a missing key. Prod: returns the key. */

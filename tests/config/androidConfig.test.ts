@@ -102,3 +102,19 @@ describe('withReleaseMinSdk', () => {
     expect(typeof config.mods?.android?.appBuildGradle).toBe('function');
   });
 });
+
+describe('release manifest push stripping', () => {
+  it('release manifest strips Firebase push', () => {
+    for (const name of [
+      'android.permission.ACCESS_NETWORK_STATE',
+      'com.google.android.c2dm.permission.RECEIVE',
+      'expo.modules.notifications.service.ExpoFirebaseMessagingService',
+      'com.google.firebase.messaging.FirebaseMessagingService',
+      'com.google.firebase.iid.FirebaseInstanceIdReceiver',
+    ]) {
+      expect(plugin.RELEASE_MANIFEST).toMatch(
+        new RegExp(`android:name="${name.replace(/\./g, '\\.')}"[^>]*tools:node="remove"`),
+      );
+    }
+  });
+});

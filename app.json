@@ -47,6 +47,13 @@
           "neverForLocation": true
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#c4502b"
+        }
+      ],
+      "./plugins/withNoPushEntitlement",
       "./plugins/withReleaseNoInternet",
       "./plugins/withReleaseMinSdk",
       [
