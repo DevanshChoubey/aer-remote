@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -20,15 +23,39 @@ describe('iOS config', () => {
     });
   });
 
-  it('lists the plugin after expo-notifications', () => {
-    const names = appJson.expo.plugins.map((p) => (Array.isArray(p) ? p[0] : p));
-    const notifications = names.indexOf('expo-notifications');
-    expect(notifications).toBeGreaterThan(-1);
-    expect(names.indexOf('./plugins/withNoPushEntitlement')).toBe(notifications + 1);
-    expect(appJson.expo.plugins[notifications]).toEqual([
-      'expo-notifications',
-      { color: '#c4502b' },
-    ]);
+  it('leaves no push entitlement once every plugin has run', async () => {
+    // Mods run in reverse order of the plugins list, so the order in app.json decides who wins.
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { getPrebuildConfigAsync } = require('@expo/prebuild-config') as {
+      getPrebuildConfigAsync: (
+        root: string,
+        opts: { platforms: string[] },
+      ) => Promise<{ exp: Record<string, unknown> }>;
+    };
+    const { compileModsAsync } = require('@expo/config-plugins') as {
+      compileModsAsync: (
+        config: Record<string, unknown>,
+        opts: Record<string, unknown>,
+      ) => Promise<{ ios?: { entitlements?: Record<string, unknown> } }>;
+    };
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const projectRoot = path.resolve(__dirname, '../..');
+    const { exp } = await getPrebuildConfigAsync(projectRoot, { platforms: ['ios'] });
+    const compiled = await compileModsAsync(exp, {
+      projectRoot,
+      introspect: true,
+      platforms: ['ios'],
+      assertMissingModProviders: false,
+    });
+    expect(compiled.ios?.entitlements).toBeDefined();
+    expect(compiled.ios?.entitlements).not.toHaveProperty('aps-environment');
+  }, 60_000);
+
+  it('keeps the notification colour', () => {
+    const entry = appJson.expo.plugins.find(
+      (p) => Array.isArray(p) && p[0] === 'expo-notifications',
+    );
+    expect(entry).toEqual(['expo-notifications', { color: '#c4502b' }]);
   });
 
   it('adds an entitlements mod to the config', () => {
