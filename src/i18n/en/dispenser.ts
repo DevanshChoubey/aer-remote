@@ -4,6 +4,7 @@ export default {
   autoSpray: 'Auto spray',
   autoEvery: 'Every {minutes} minutes',
   autoOff: 'Off',
+  autoOffScheduleRunning: 'Off while a schedule runs',
   status: 'Status',
   refill: 'Refill left',
   refillReset: 'I refilled it',

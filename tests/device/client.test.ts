@@ -496,7 +496,14 @@ describe('fix round 1', () => {
       id: ID,
       name: 'Hall',
       homeTimeZone: TZ,
-      lastStatus: { batteryMv: 1, firmware: 'x', autoSpray: null, spraysSinceRefill: 0, at: 'old' },
+      lastStatus: {
+        batteryMv: 1,
+        firmware: 'x',
+        autoSpray: null,
+        scheduleRunning: false,
+        spraysSinceRefill: 0,
+        at: 'old',
+      },
     });
     const p = r.client.saveSchedules(ID, [morning]);
     await jest.advanceTimersByTimeAsync(5000);

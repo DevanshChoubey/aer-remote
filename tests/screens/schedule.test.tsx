@@ -112,7 +112,7 @@ describe('ScheduleEditor', () => {
   it('saves a new Mon to Fri schedule to the dispenser', async () => {
     const { fake, services } = await mount();
     await fireEvent.press(await screen.findByLabelText('Weekdays'));
-    expect(screen.getByText('About 36 sprays a day')).toBeTruthy();
+    expect(screen.getByText('About 37 sprays a day')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Save schedule'));
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
     expect(fake.state('a').schedules).toEqual([
@@ -150,7 +150,7 @@ describe('ScheduleEditor', () => {
 
   it('shows the rounded end time when the device stores a different one', async () => {
     const { fake, services } = await mount();
-    // 08:00 to 20:10 every 20 minutes holds 36 sprays, which the device reads back as 20:00.
+    // 08:00 to 20:10 every 20 minutes holds 36 intervals, which the device reads back as 20:00.
     await fireEvent.press(await screen.findByLabelText(/^End time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText('Save schedule'));
@@ -272,7 +272,7 @@ describe('ScheduleEditor', () => {
     const twin: Schedule = { ...morning, days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] };
     const { fake, services } = await mount({ schedules: [twin] });
     await screen.findByLabelText('Save schedule');
-    // 08:00 to 12:10 every 20 minutes holds 12 sprays, which the device reads back as 12:00.
+    // 08:00 to 12:10 every 20 minutes holds 12 intervals, which the device reads back as 12:00.
     for (let i = 0; i < 8; i += 1)
       await fireEvent.press(screen.getByLabelText(/^End time .*, hour down$/));
     await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));

@@ -2,6 +2,7 @@ import {
   decodeScheduleEntry,
   encodeScheduleEntry,
   nextSprayToday,
+  repeatCount,
   runsToday,
   sprayCount,
   validateSchedule,
@@ -47,8 +48,19 @@ describe('schedule', () => {
 
   it('flags too many sprays', () => {
     const s: Schedule = { ...weekdays, start: { h: 0, m: 0 }, end: { h: 23, m: 59 }, interval: 10 };
-    expect(sprayCount(s)).toBe(143);
+    expect(repeatCount(s)).toBe(143);
+    expect(sprayCount(s)).toBe(144);
     expect(validateSchedule(s)).toEqual([]);
+  });
+
+  it('counts the spray at the end time when it lands on the interval', () => {
+    const at = (sh: number, sm: number, eh: number, em: number, interval: 10 | 20 | 40): number =>
+      sprayCount({ ...weekdays, start: { h: sh, m: sm }, end: { h: eh, m: em }, interval });
+    expect(at(6, 0, 16, 0, 40)).toBe(16);
+    expect(at(18, 50, 19, 50, 20)).toBe(4);
+    expect(at(6, 0, 6, 50, 20)).toBe(3);
+    expect(at(8, 0, 8, 5, 10)).toBe(0);
+    expect(at(9, 0, 8, 0, 10)).toBe(0);
   });
 
   it('decoded end is start plus count times interval', () => {
@@ -93,6 +105,14 @@ describe('nextSprayToday', () => {
     expect(nextSprayToday([morning], at('2026-10-26T02:35:00Z'), 'Asia/Kolkata')).toEqual({
       h: 8,
       m: 20,
+    });
+  });
+
+  it('includes the spray at the end time', () => {
+    // 08:45 -> the last spray is at 09:00, the end.
+    expect(nextSprayToday([morning], at('2026-10-26T03:15:00Z'), 'Asia/Kolkata')).toEqual({
+      h: 9,
+      m: 0,
     });
   });
 

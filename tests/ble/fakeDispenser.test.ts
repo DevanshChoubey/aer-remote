@@ -179,8 +179,8 @@ describe('fake dispenser', () => {
   });
 
   it.each([
-    [10, 121],
-    [40, 123],
+    [10, 112],
+    [40, 114],
   ] as const)('reports cS for interval %i', async (interval, code) => {
     const { conn, chunks } = await open();
     await conn.write(DEFAULT_CHANNELS.command, sprayNowMsg(1, interval).bytes);

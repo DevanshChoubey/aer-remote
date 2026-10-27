@@ -39,7 +39,14 @@ const kitchen: SavedDispenser = {
   name: 'Kitchen',
   homeTimeZone: 'Asia/Kolkata',
   clockSet: true,
-  lastStatus: { batteryMv: 2750, firmware: '1', autoSpray: null, spraysSinceRefill: 1100, at: NOW },
+  lastStatus: {
+    batteryMv: 2750,
+    firmware: '1',
+    autoSpray: null,
+    scheduleRunning: false,
+    spraysSinceRefill: 1100,
+    at: NOW,
+  },
   schedules: {
     list: [
       {
@@ -74,6 +81,7 @@ describe('HomeScreen', () => {
         batteryMv: 3100,
         firmware: '1',
         autoSpray: null,
+        scheduleRunning: false,
         spraysSinceRefill: 0,
         at: NOW,
       },
@@ -205,9 +213,9 @@ describe('HomeScreen', () => {
 });
 
 describe('DispenserTile', () => {
-  // Monday 2026-10-26, 15:44 in Kolkata.
-  const afternoon = new Date('2026-10-26T10:14:00.000Z');
-  // 06:00-16:00 every 40 minutes: the last spray is at 15:20.
+  // Monday 2026-10-26, 16:14 in Kolkata.
+  const afternoon = new Date('2026-10-26T10:44:00.000Z');
+  // 06:00-16:00 every 40 minutes: the last spray is at 16:00, the end time.
   const daytime = {
     start: { h: 6, m: 0 },
     end: { h: 16, m: 0 },

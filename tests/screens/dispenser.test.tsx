@@ -106,12 +106,32 @@ describe('DispenserScreen', () => {
           batteryMv: 3000,
           firmware: '1.0.0',
           autoSpray: null,
+          scheduleRunning: false,
           spraysSinceRefill: 0,
           at: threeHoursAgo,
         },
       },
     });
     expect(await screen.findByText('Last checked 3 h ago')).toBeTruthy();
+    await done(services);
+  });
+
+  it('says auto spray is off while a schedule runs', async () => {
+    const { services } = await mount({
+      busy: true,
+      saved: {
+        lastStatus: {
+          batteryMv: 3000,
+          firmware: '1.0.0',
+          autoSpray: null,
+          scheduleRunning: true,
+          spraysSinceRefill: 0,
+          at: new Date().toISOString(),
+        },
+      },
+    });
+    expect(await screen.findByText('Off while a schedule runs')).toBeTruthy();
+    expect(screen.getByLabelText('Auto spray').props.accessibilityState.checked).toBe(false);
     await done(services);
   });
 
@@ -154,6 +174,7 @@ describe('DispenserScreen', () => {
           batteryMv: 2750,
           firmware: '1',
           autoSpray: null,
+          scheduleRunning: false,
           spraysSinceRefill: 0,
           at: '2026-10-26T10:00:00.000Z',
         },

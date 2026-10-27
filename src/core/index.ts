@@ -5,6 +5,7 @@ export { DeviceError, type DeviceErrorCode } from '@/device/errors';
 export {
   MAX_SCHEDULES,
   nextSprayToday,
+  repeatCount,
   runsToday,
   sprayCount,
   validateSchedule,
