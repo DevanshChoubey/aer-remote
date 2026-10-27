@@ -23,8 +23,9 @@ jest.mock('react-native/Libraries/Components/Keyboard/KeyboardAvoidingView', () 
 });
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
+  useRouter: () => ({ replace: mockReplace, push: jest.fn(), back: mockBack }),
 }));
 
 async function mount(transport: BleTransport, store = createMemoryStore()): Promise<Services> {
@@ -40,7 +41,22 @@ async function mount(transport: BleTransport, store = createMemoryStore()): Prom
 }
 
 describe('AddScreen', () => {
-  beforeEach(() => mockReplace.mockClear());
+  beforeEach(() => {
+    mockReplace.mockClear();
+    mockBack.mockClear();
+  });
+
+  it('goes back from the scan list and stops the scan', async () => {
+    const fake: FakeTransport = createFakeTransport({});
+    const stop = jest.fn();
+    jest
+      .spyOn(fake, 'scan')
+      .mockImplementation(() => ({ stop, done: new Promise(() => undefined) }));
+    await mount(fake);
+    await fireEvent.press(screen.getByLabelText('Back'));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalled();
+  });
 
   it('lists found dispensers and saves the chosen one with the phone zone', async () => {
     const fake: FakeTransport = createFakeTransport({ d1: {}, d2: {} });

@@ -96,6 +96,14 @@ export function AddScreen(): ReactElement {
 
   return (
     <Screen title={t('add.title')} scroll>
+      <Button
+        variant="ghost"
+        label={t('common.back')}
+        onPress={() => {
+          scan.stop();
+          router.back();
+        }}
+      />
       <Txt color="muted">{t('add.intro')}</Txt>
       {scan.status === 'scanning' ? (
         <Row gap={3} align="center">
