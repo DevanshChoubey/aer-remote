@@ -276,7 +276,7 @@ describe('ScheduleEditor', () => {
     await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText(/^End time .*, minutes up$/));
     await fireEvent.press(screen.getByLabelText('Save schedule'));
-    expect(await screen.findByText('The dispenser rounded the end time to 12:00 pm.')).toBeTruthy();
+    expect(await screen.findByText('The dispenser rounded the end time to 12:00 PM.')).toBeTruthy();
     // Saving again replaces the entry just saved, never the twin.
     await fireEvent.press(screen.getByLabelText('10 min'));
     await fireEvent.press(screen.getByLabelText('Save schedule'));
@@ -410,8 +410,8 @@ describe('ScheduleEditor', () => {
 
   it('puts the current time in the stepper button names', async () => {
     const { services } = await mount();
-    expect(await screen.findByLabelText('Start time 8:00 am, hour up')).toBeTruthy();
-    expect(screen.getByLabelText('End time 8:00 pm, minutes down')).toBeTruthy();
+    expect(await screen.findByLabelText('Start time 8:00 AM, hour up')).toBeTruthy();
+    expect(screen.getByLabelText('End time 8:00 PM, minutes down')).toBeTruthy();
     await done(services);
   });
 });
