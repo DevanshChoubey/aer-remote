@@ -57,7 +57,8 @@ describe('createExpoScheduler', () => {
     const unsubscribe = createExpoScheduler().onOpen(cb);
     const listener = mock.addNotificationResponseReceivedListener.mock.calls[0]?.[0];
     listener?.({
-      notification: { request: { content: { data: { dispenserId: 'd9' } } } },
+      notification: { request: { identifier: 'n9', content: { data: { dispenserId: 'd9' } } } },
+      actionIdentifier: 'default',
     } as never);
     expect(cb).toHaveBeenCalledWith('d9');
     unsubscribe();
@@ -65,7 +66,8 @@ describe('createExpoScheduler', () => {
 
   it('onOpen also reports the notification that cold-started the app', async () => {
     mock.getLastNotificationResponseAsync.mockResolvedValueOnce({
-      notification: { request: { content: { data: { dispenserId: 'd2' } } } },
+      notification: { request: { identifier: 'n2', content: { data: { dispenserId: 'd2' } } } },
+      actionIdentifier: 'default',
     } as never);
     const cb = jest.fn();
     createExpoScheduler().onOpen(cb);
@@ -77,5 +79,49 @@ describe('createExpoScheduler', () => {
     const s = createExpoScheduler();
     expect(await s.permission()).toBe('undetermined');
     expect(await s.requestPermission()).toBe('granted');
+  });
+
+  it('retries channel setup after a failure', async () => {
+    // The channel promise is cached per module, so use a fresh module for a clean cache.
+    let fresh!: typeof import('@/alerts/expoScheduler');
+    let freshMock!: jest.MockedObject<typeof Notifications>;
+    jest.isolateModules(() => {
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      freshMock = jest.mocked(require('expo-notifications') as typeof Notifications);
+      fresh = require('@/alerts/expoScheduler') as typeof fresh;
+      /* eslint-enable @typescript-eslint/no-require-imports */
+    });
+    freshMock.setNotificationChannelAsync.mockRejectedValueOnce(new Error('boom'));
+    const s = fresh.createExpoScheduler();
+    const at = new Date(Date.now() + 3_600_000);
+    await expect(s.schedule(alert(at))).rejects.toThrow('boom');
+    await expect(s.schedule(alert(at))).resolves.toBeUndefined();
+    expect(freshMock.setNotificationChannelAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('warns instead of leaking a rejection when the cold-start read fails', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mock.getLastNotificationResponseAsync.mockRejectedValueOnce(new Error('nope'));
+    createExpoScheduler().onOpen(jest.fn());
+    await new Promise((r) => setImmediate(r));
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('handles a cold-start tap once across subscriptions', async () => {
+    const last = {
+      notification: { request: { identifier: 'n3', content: { data: { dispenserId: 'd3' } } } },
+      actionIdentifier: 'default',
+    } as never;
+    mock.getLastNotificationResponseAsync.mockResolvedValue(last);
+    const cb = jest.fn();
+    const s = createExpoScheduler();
+    s.onOpen(cb);
+    s.onOpen(cb);
+    await new Promise((r) => setImmediate(r));
+    // The live listener may also deliver the same tap.
+    mock.addNotificationResponseReceivedListener.mock.calls[0]?.[0](last);
+    expect(cb).toHaveBeenCalledTimes(1);
+    mock.getLastNotificationResponseAsync.mockResolvedValue(null);
   });
 });

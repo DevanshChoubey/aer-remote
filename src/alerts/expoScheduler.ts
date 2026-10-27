@@ -9,6 +9,8 @@ const CHANNEL = 'alerts';
 
 let handlerSet = false;
 let channelReady: Promise<unknown> | undefined;
+// getLastNotificationResponseAsync keeps returning the same tap, so remember the one handled.
+let lastHandled: string | undefined;
 
 function ensureHandler(): void {
   if (handlerSet) return;
@@ -28,6 +30,9 @@ function ensureChannel(): Promise<unknown> {
   channelReady ??= Notifications.setNotificationChannelAsync(CHANNEL, {
     name: t('alerts.channel'),
     importance: AndroidImportance.DEFAULT,
+  }).catch((e: unknown) => {
+    channelReady = undefined; // let the next schedule() retry
+    throw e;
   });
   return channelReady;
 }
@@ -80,15 +85,24 @@ export function createExpoScheduler(): AlertScheduler {
     },
     onOpen(cb) {
       let active = true;
-      const sub = Notifications.addNotificationResponseReceivedListener((r) => {
+      // Calls back once per tap, however many subscriptions see it.
+      const handle = (r: Notifications.NotificationResponse | null): void => {
         const id = dispenserIdOf(r);
-        if (id) cb(id);
-      });
+        if (!r || !id) return;
+        const key = `${r.notification.request.identifier}|${r.actionIdentifier}`;
+        if (key === lastHandled) return;
+        lastHandled = key;
+        cb(id);
+      };
+      const sub = Notifications.addNotificationResponseReceivedListener(handle);
       // A tap that launched the app arrives before the listener exists.
-      void Notifications.getLastNotificationResponseAsync().then((r) => {
-        const id = dispenserIdOf(r);
-        if (active && id) cb(id);
-      });
+      Notifications.getLastNotificationResponseAsync()
+        .then((r) => {
+          if (active) handle(r);
+        })
+        .catch((e: unknown) =>
+          console.warn('Could not read the notification that opened the app', e),
+        );
       return () => {
         active = false;
         sub.remove();
