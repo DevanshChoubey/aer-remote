@@ -33,34 +33,31 @@ export function ScheduleEditor(): ReactElement {
 
   const back = (): void => router.back();
   const title = t(d.isNew ? 'schedule.titleNew' : 'schedule.titleEdit');
-  const backButton = <Button variant="ghost" label={t('common.back')} onPress={back} />;
 
   if (badIndex || d.stale) {
     return (
-      <Screen title={title}>
+      <Screen title={title} onBack={back}>
         <Txt>{t('schedule.missing')}</Txt>
-        {backButton}
       </Screen>
     );
   }
   if (!d.loaded) {
     return (
-      <Screen title={title}>
+      <Screen title={title} onBack={back}>
         <Txt color="muted">{t('common.loading')}</Txt>
       </Screen>
     );
   }
   if (d.missing) {
     return (
-      <Screen title={title}>
+      <Screen title={title} onBack={back}>
         <Txt>{t('dispenser.notFound')}</Txt>
-        {backButton}
       </Screen>
     );
   }
   if (d.unknown) {
     return (
-      <Screen title={title}>
+      <Screen title={title} onBack={back}>
         <Txt>{t('schedule.unknown')}</Txt>
         {d.errorKey ? <Txt color="warn">{t(d.errorKey)}</Txt> : null}
         <Button
@@ -69,7 +66,6 @@ export function ScheduleEditor(): ReactElement {
           disabled={d.refreshing}
           loading={d.refreshing}
         />
-        {backButton}
       </Screen>
     );
   }
@@ -81,7 +77,7 @@ export function ScheduleEditor(): ReactElement {
   };
 
   return (
-    <Screen title={title} scroll>
+    <Screen title={title} scroll onBack={back}>
       <Column gap={4}>
         <Card>
           <TimeStepper label={t('schedule.start')} value={d.draft.start} onChange={d.setStart} />

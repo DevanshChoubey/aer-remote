@@ -39,13 +39,15 @@ export function DispenserScreen(): ReactElement {
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
 
-  const back = <Button variant="ghost" label={t('common.back')} onPress={() => router.back()} />;
+  const back = (): void => router.back();
   const { dispenser } = v;
   if (v.missing || !dispenser) {
     return (
-      <Screen title={v.missing ? t('dispenser.notFoundTitle') : t('common.loading')}>
+      <Screen
+        title={v.missing ? t('dispenser.notFoundTitle') : t('common.loading')}
+        onBack={v.missing ? back : undefined}
+      >
         {v.missing ? <Txt>{t('dispenser.notFound')}</Txt> : null}
-        {v.missing ? back : null}
       </Screen>
     );
   }
@@ -89,20 +91,24 @@ export function DispenserScreen(): ReactElement {
   };
 
   return (
-    <Screen title={dispenser.name} scroll>
-      <Column gap={4}>
-        {back}
-        {v.busy === 'refresh' ? <Txt color="muted">{t('dispenser.checking')}</Txt> : null}
-        {v.errorKey ? <Txt color="warn">{t(v.errorKey)}</Txt> : null}
-        {dispenser.clockSet === false ? <Txt color="muted">{t('home.clockHint')}</Txt> : null}
-        {tooLow ? <Txt color="warn">{t('errors.batteryTooLow')}</Txt> : null}
-
+    <Screen
+      title={dispenser.name}
+      scroll
+      onBack={back}
+      footer={
         <Button
           label={v.busy === 'spray' ? t('dispenser.spraying') : t('dispenser.sprayNow')}
           onPress={() => void v.sprayNow()}
           disabled={!idle}
           loading={v.busy === 'spray'}
         />
+      }
+    >
+      <Column gap={4}>
+        {v.busy === 'refresh' ? <Txt color="muted">{t('dispenser.checking')}</Txt> : null}
+        {v.errorKey ? <Txt color="warn">{t(v.errorKey)}</Txt> : null}
+        {dispenser.clockSet === false ? <Txt color="muted">{t('home.clockHint')}</Txt> : null}
+        {tooLow ? <Txt color="warn">{t('errors.batteryTooLow')}</Txt> : null}
 
         <Card>
           <Toggle

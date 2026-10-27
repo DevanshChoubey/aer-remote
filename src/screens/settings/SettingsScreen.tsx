@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactElement } from 'react';
 
 import { t } from '@/i18n';
 import { useThemePreference, type ThemePreference } from '@/theme';
-import { Button, Card, Chip, Column, Input, Row, Screen, Touchable, Txt } from '@/ui';
+import { Card, Chip, Column, Input, Row, Screen, Touchable, Txt } from '@/ui';
 
 import { useSettings } from './useSettings';
 import { filterZones, listTimeZones, phoneZone, zonesFirst } from './zones';
@@ -32,16 +32,15 @@ export function SettingsScreen(): ReactElement {
 
   if (picking) {
     return (
-      <Screen title={t('settings.zoneTitle', { name: picking.name })} scroll>
+      <Screen
+        title={t('settings.zoneTitle', { name: picking.name })}
+        scroll
+        onBack={() => {
+          setPickingId(null);
+          setQuery('');
+        }}
+      >
         <Column gap={3}>
-          <Button
-            variant="ghost"
-            label={t('common.back')}
-            onPress={() => {
-              setPickingId(null);
-              setQuery('');
-            }}
-          />
           <Txt color="muted">{t('settings.zoneCurrent', { zone: picking.homeTimeZone })}</Txt>
           <Txt variant="caption" color="muted">
             {t('settings.zoneHint')}
@@ -82,9 +81,8 @@ export function SettingsScreen(): ReactElement {
   }
 
   return (
-    <Screen title={t('settings.title')} scroll>
+    <Screen title={t('settings.title')} scroll onBack={() => router.back()}>
       <Column gap={4}>
-        <Button variant="ghost" label={t('common.back')} onPress={() => router.back()} />
         <Card>
           <Txt variant="heading">{t('settings.theme')}</Txt>
           <Row gap={2} wrap>
