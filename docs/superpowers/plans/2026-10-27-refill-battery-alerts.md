@@ -218,7 +218,7 @@ also extends `docs/superpowers/specs/2026-10-26-aer-remote-design.md`.
   - `package.json` and `bun.lock`, through `bunx expo install expo-notifications`. Don't stage
     the unrelated `android`/`ios` script edits already in the working tree.
   - `app.json`: add `"expo-notifications"` with `{ "color": "#c4502b" }`, and
-    `"./plugins/withNoPushEntitlement"` after it in `plugins`.
+    `"./plugins/withNoPushEntitlement"` before it in `plugins` (mods run in reverse order, so ours runs last).
   - `plugins/withReleaseNoInternet.js`: `RELEASE_MANIFEST` also removes `ACCESS_NETWORK_STATE`,
     `com.google.android.c2dm.permission.RECEIVE`,
     `expo.modules.notifications.service.ExpoFirebaseMessagingService`,
