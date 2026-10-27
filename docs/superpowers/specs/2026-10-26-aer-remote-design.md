@@ -87,8 +87,10 @@ strict TS, typed errors, TDD, Prettier/ESLint, lefthook, Conventional Commits, C
 - On every connect: subscribe to `…0001`, set time (mT 102), fetch status (mT 107).
 - Channel probe on first connect: try the standard channels; if fetch-status gets no reply, try the
   other writable characteristics and remember the pair that answers (firmware quirk).
-- Scan filter: devices advertising the `6E400000-…` service. Remember the device id so later
-  connects skip the scan where the OS allows.
+- Scan: list every nearby Bluetooth device by its advertised name, first found first. A real dispenser
+  does not advertise the `6E400000-…` service (hardware test, 2026-10-27), so the scan cannot filter
+  by it; adding a device checks for the service and says when it is not a Smart Matic. Remember the
+  device id so later connects skip the scan where the OS allows.
 
 ### Schedules
 

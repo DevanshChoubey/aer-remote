@@ -13,7 +13,7 @@ export interface FoundDispenser {
 export type ScanStatus = 'scanning' | 'done' | 'error';
 
 export interface ScanState {
-  /** Unsaved dispensers in range, in the order they were first found. */
+  /** Unsaved Bluetooth devices in range, in the order they were first found. */
   devices: FoundDispenser[];
   status: ScanStatus;
   error: unknown;
@@ -25,7 +25,10 @@ export interface ScanState {
 
 export const SCAN_MS = 15000;
 
-/** Scans for dispensers that are not saved yet; starts on mount, stops on unmount. */
+/**
+ * Scans for devices that are not saved yet; starts on mount, stops on unmount. Every device is
+ * listed: a real dispenser does not advertise its service, and adding one checks for it.
+ */
 export function useScan(): ScanState {
   const { client, store } = useServices();
   const [devices, setDevices] = useState<FoundDispenser[]>([]);

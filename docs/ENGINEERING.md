@@ -79,7 +79,10 @@ Domain code throws typed errors (`DeviceError` and the like). Screens map them t
 
 No network calls anywhere. ESLint `no-restricted-globals: fetch` applies to every file. Release builds
 remove the `INTERNET` permission through `plugins/withReleaseNoInternet.js` (debug builds keep it for
-Metro), and location is never requested and is blocked in `app.json`. No telemetry or analytics. Never log
+Metro), and location is never requested and is blocked in `app.json`. The one exception is debug builds
+on Android 11: release builds need Android 12 (`plugins/withReleaseMinSdk.js`), but debug builds install
+from Android 11 for the hardware test, and only there ask for precise location, which Android 11 needs to
+scan. The release manifest strips those location entries. No telemetry or analytics. Never log
 device identifiers beyond what a debug screen shows the user.
 
 ## Accessibility
@@ -96,7 +99,9 @@ TDD: write the failing test, watch it fail, implement, watch it pass. Tests live
 
 Conventional Commits (`feat(scope): ...`, `fix`, `chore`, `docs`, `test`, `refactor`), checked by the
 lefthook `commit-msg` hook. `pre-commit` runs Prettier and ESLint on staged files; `pre-push` runs
-`bun run typecheck && bun run test`. Small commits, one task per branch (`lane/<task-id>`).
+`bun run typecheck && bun run test` and refuses pushes to `main`. Small commits, one task per branch
+(`lane/<task-id>`); every change reaches `main` through a pull request with green CI. GitHub branch
+protection on `main` needs the repo public (or a paid plan), so turn it on when the repo goes public.
 
 ## CI
 

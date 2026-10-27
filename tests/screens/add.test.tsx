@@ -23,8 +23,9 @@ jest.mock('react-native/Libraries/Components/Keyboard/KeyboardAvoidingView', () 
 });
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
+  useRouter: () => ({ replace: mockReplace, push: jest.fn(), back: mockBack }),
 }));
 
 async function mount(transport: BleTransport, store = createMemoryStore()): Promise<Services> {
@@ -40,15 +41,30 @@ async function mount(transport: BleTransport, store = createMemoryStore()): Prom
 }
 
 describe('AddScreen', () => {
-  beforeEach(() => mockReplace.mockClear());
+  beforeEach(() => {
+    mockReplace.mockClear();
+    mockBack.mockClear();
+  });
+
+  it('goes back from the scan list and stops the scan', async () => {
+    const fake: FakeTransport = createFakeTransport({});
+    const stop = jest.fn();
+    jest
+      .spyOn(fake, 'scan')
+      .mockImplementation(() => ({ stop, done: new Promise(() => undefined) }));
+    await mount(fake);
+    await fireEvent.press(screen.getByLabelText('Back'));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalled();
+  });
 
   it('lists found dispensers and saves the chosen one with the phone zone', async () => {
     const fake: FakeTransport = createFakeTransport({ d1: {}, d2: {} });
     const services = await mount(fake);
-    expect(await screen.findByLabelText('Choose Dispenser 1')).toBeTruthy();
-    expect(screen.getByLabelText('Choose Dispenser 2')).toBeTruthy();
+    expect(await screen.findByLabelText('Choose Smart Matic 1')).toBeTruthy();
+    expect(screen.getByLabelText('Choose Smart Matic 2')).toBeTruthy();
 
-    await fireEvent.press(screen.getByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(screen.getByLabelText('Choose Smart Matic 1'));
     const name = await screen.findByLabelText('Name');
     expect(name.props.value).toBe('Air freshener');
     // Screen owns the keyboard handling; the name step adds no second one.
@@ -70,15 +86,42 @@ describe('AddScreen', () => {
     const store = createMemoryStore();
     await store.upsert({ id: 'd1', name: 'Kitchen', homeTimeZone: 'UTC' });
     await mount(fake, store);
-    expect(await screen.findByLabelText('Choose Dispenser 1')).toBeTruthy();
-    expect(screen.queryByLabelText('Choose Dispenser 2')).toBeNull();
+    expect(await screen.findByLabelText('Choose Smart Matic 1')).toBeTruthy();
+    expect(screen.queryByLabelText('Choose Smart Matic 2')).toBeNull();
+  });
+
+  // A real Smart Matic does not advertise its service, so every nearby device is listed by name.
+  it('lists every nearby device by its name, numbering each one', async () => {
+    const fake = createFakeTransport({});
+    jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
+      onFound({ id: 'tv', name: '[LG] webOS TV', rssi: -90 });
+      onFound({ id: 'aer', name: 'Smart Matic', rssi: -48 });
+      onFound({ id: 'tag', name: null, rssi: -70 });
+      return { stop: () => undefined, done: new Promise(() => undefined) };
+    });
+    await mount(fake);
+    expect(await screen.findByLabelText('Choose [LG] webOS TV 1')).toBeTruthy();
+    expect(screen.getByLabelText('Choose Smart Matic 2')).toBeTruthy();
+    expect(screen.getByLabelText('Choose Unnamed device 3')).toBeTruthy();
+  });
+
+  it('says so when the chosen device is not a dispenser', async () => {
+    const fake = createFakeTransport({ d1: {} });
+    const services = await mount(fake);
+    jest.spyOn(services.client, 'add').mockRejectedValueOnce(new DeviceError('notDispenser'));
+    await fireEvent.press(await screen.findByLabelText('Choose Smart Matic 1'));
+    await fireEvent.press(await screen.findByLabelText('Save dispenser'));
+    expect(
+      await screen.findByText("That device isn't a Smart Matic. Pick another one from the list."),
+    ).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('shows a busy state and an inline error when blinking fails', async () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);
     jest.spyOn(services.client, 'blink').mockRejectedValueOnce(new DeviceError('unreachable'));
-    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Smart Matic 1'));
     expect(
       await screen.findByText(
         "Can't reach the dispenser. Move closer, or close the Godrej app or any other phone that's connected to it.",
@@ -89,11 +132,11 @@ describe('AddScreen', () => {
   it('blinks an unsaved dispenser against the fake without an error', async () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);
-    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Smart Matic 1'));
     await waitFor(() => expect(fake.state('d1').ledBlinks).toBe(1));
     expect(screen.queryByText(/Can't reach the dispenser/)).toBeNull();
     expect(await services.store.list()).toEqual([]);
-    await fireEvent.press(screen.getByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(screen.getByLabelText('Choose Smart Matic 1'));
     await fireEvent.press(await screen.findByLabelText('Save dispenser'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalled());
     await services.client.remove('d1');
@@ -103,7 +146,7 @@ describe('AddScreen', () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);
     const blink = jest.spyOn(services.client, 'blink').mockResolvedValue(undefined);
-    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Smart Matic 1'));
     expect(blink).toHaveBeenCalledWith('d1', Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 
@@ -123,14 +166,14 @@ describe('AddScreen', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByLabelText('Try again')).toBeTruthy();
-    expect(screen.queryByLabelText('Choose Dispenser 1')).toBeNull();
+    expect(screen.queryByLabelText('Choose Smart Matic 1')).toBeNull();
   });
 
   it('shows an inline error when saving fails', async () => {
     const fake = createFakeTransport({ d1: {} });
     const services = await mount(fake);
     jest.spyOn(services.client, 'add').mockRejectedValueOnce(new Error('x'));
-    await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Choose Smart Matic 1'));
     await fireEvent.press(await screen.findByLabelText('Save dispenser'));
     expect(await screen.findByText('Something went wrong. Please try again.')).toBeTruthy();
     expect(mockReplace).not.toHaveBeenCalled();
@@ -171,7 +214,7 @@ describe('AddScreen', () => {
     const stop = jest.fn();
     const fake = createFakeTransport({ d1: {} });
     jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
-      onFound({ id: 'd1', name: 'aer', rssi: -50 });
+      onFound({ id: 'd1', name: 'Smart Matic', rssi: -50 });
       return { stop, done: new Promise(() => undefined) };
     });
     const services = createServices({ transport: fake, store: createMemoryStore() });
@@ -182,7 +225,7 @@ describe('AddScreen', () => {
         </ThemeProvider>
       </ServicesProvider>,
     );
-    await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Choose Smart Matic 1'));
     expect(stop).toHaveBeenCalledTimes(1);
     await view.unmount();
     expect(stop).toHaveBeenCalledTimes(1);
@@ -212,7 +255,7 @@ describe('AddScreen', () => {
     });
     await view.unmount();
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(() => report({ id: 'late', name: 'aer', rssi: -40 })).not.toThrow();
+    expect(() => report({ id: 'late', name: 'Smart Matic', rssi: -40 })).not.toThrow();
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -223,7 +266,7 @@ describe('AddScreen', () => {
     const add = jest
       .spyOn(services.client, 'add')
       .mockImplementation(() => new Promise(() => undefined));
-    await fireEvent.press(await screen.findByLabelText('Choose Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Choose Smart Matic 1'));
     const name = await screen.findByLabelText('Name');
     await fireEvent(name, 'submitEditing');
     await fireEvent(name, 'submitEditing');
@@ -235,7 +278,7 @@ describe('AddScreen', () => {
     const stop = jest.fn();
     const fake = createFakeTransport({});
     const scan = jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
-      onFound({ id: 'd1', name: 'aer', rssi: -50 });
+      onFound({ id: 'd1', name: 'Smart Matic', rssi: -50 });
       return { stop, done: new Promise(() => undefined) };
     });
     const services = await mount(fake);
@@ -244,9 +287,9 @@ describe('AddScreen', () => {
     jest.spyOn(services.client, 'blink').mockImplementation(async () => {
       order.push('blink');
     });
-    await fireEvent.press(await screen.findByLabelText('Blink the light on Dispenser 1'));
+    await fireEvent.press(await screen.findByLabelText('Blink the light on Smart Matic 1'));
     await waitFor(() => expect(order).toEqual(['stop', 'blink']));
-    expect(screen.getByLabelText('Choose Dispenser 1')).toBeTruthy();
+    expect(screen.getByLabelText('Choose Smart Matic 1')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Look again'));
     expect(scan).toHaveBeenCalledTimes(2);
   });
@@ -257,21 +300,24 @@ describe('AddScreen', () => {
       undefined;
     jest.spyOn(fake, 'scan').mockImplementation((onFound) => {
       report = onFound;
-      onFound({ id: 'first', name: 'aer', rssi: -80 });
-      onFound({ id: 'second', name: 'aer', rssi: -70 });
+      onFound({ id: 'first', name: 'Smart Matic', rssi: -80 });
+      onFound({ id: 'second', name: 'Smart Matic', rssi: -70 });
       return { stop: () => undefined, done: new Promise(() => undefined) };
     });
     const services = await mount(fake);
     const blink = jest.spyOn(services.client, 'blink').mockResolvedValue(undefined);
-    await screen.findByLabelText('Blink the light on Dispenser 2');
+    await screen.findByLabelText('Blink the light on Smart Matic 2');
     await act(async () => {
-      report({ id: 'second', name: 'aer', rssi: -30 });
+      report({ id: 'second', name: 'Smart Matic', rssi: -30 });
     });
     const labels = screen
       .getAllByLabelText(/^Blink the light on/)
       .map((e) => e.props.accessibilityLabel);
-    expect(labels).toEqual(['Blink the light on Dispenser 1', 'Blink the light on Dispenser 2']);
-    await fireEvent.press(screen.getByLabelText('Blink the light on Dispenser 2'));
+    expect(labels).toEqual([
+      'Blink the light on Smart Matic 1',
+      'Blink the light on Smart Matic 2',
+    ]);
+    await fireEvent.press(screen.getByLabelText('Blink the light on Smart Matic 2'));
     expect(blink.mock.calls[0]?.[0]).toBe('second');
   });
 });

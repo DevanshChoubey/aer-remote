@@ -17,5 +17,8 @@ pre-commit:
 
 pre-push:
   commands:
+    no-main:
+      run: node scripts/check-push-target.js
+      use_stdin: true
     verify:
       run: bun run typecheck && bun run test

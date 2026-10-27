@@ -34,7 +34,10 @@ const tree = (): React.JSX.Element => (
 );
 
 describe('AppProviders', () => {
-  beforeEach(() => mockHide.mockClear());
+  beforeEach(() => {
+    mockHide.mockClear();
+    mockFontsLoaded = true;
+  });
 
   it('provides services and theme to its children', async () => {
     await render(tree());
@@ -48,6 +51,16 @@ describe('AppProviders', () => {
     mockFontsLoaded = true;
     await rerender(tree());
     await waitFor(() => expect(mockHide).toHaveBeenCalledTimes(1));
+  });
+
+  // Text laid out in the fallback font keeps those widths on Android and clips once Nunito loads.
+  it('renders its children only once the fonts are ready', async () => {
+    mockFontsLoaded = false;
+    const { rerender } = await render(tree());
+    expect(screen.queryByText('ready')).toBeNull();
+    mockFontsLoaded = true;
+    await rerender(tree());
+    expect(screen.getByText('ready')).toBeTruthy();
   });
 
   it('holds its children until the saved theme preference loads, then uses it', async () => {

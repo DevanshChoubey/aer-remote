@@ -95,7 +95,14 @@ export function AddScreen(): ReactElement {
   }
 
   return (
-    <Screen title={t('add.title')} scroll>
+    <Screen
+      title={t('add.title')}
+      scroll
+      onBack={() => {
+        scan.stop();
+        router.back();
+      }}
+    >
       <Txt color="muted">{t('add.intro')}</Txt>
       {scan.status === 'scanning' ? (
         <Row gap={3} align="center">
@@ -114,7 +121,7 @@ export function AddScreen(): ReactElement {
           <Txt variant="heading">{t('add.found')}</Txt>
           <Txt color="muted">{t('add.blinkHint')}</Txt>
           {scan.devices.map((d) => {
-            const label = t('add.deviceName', { n: d.n });
+            const label = t('add.deviceName', { name: d.name ?? t('add.unnamed'), n: d.n });
             return (
               <Card key={d.id}>
                 <Txt variant="bodyBold">{label}</Txt>

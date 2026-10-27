@@ -10,5 +10,6 @@ export default {
   batteryTooLow: 'Battery too low to spray. Replace the batteries.',
   disconnected: 'The connection to the dispenser was lost. Try again.',
   timeZone: "This dispenser's time zone isn't valid. Pick it again in Settings.",
+  notDispenser: "That device isn't a Smart Matic. Pick another one from the list.",
   generic: 'Something went wrong. Please try again.',
 } as const;

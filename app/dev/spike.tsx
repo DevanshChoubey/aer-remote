@@ -62,7 +62,7 @@ function loggingTransport(inner: BleTransport, log: Log): BleTransport {
       log(`permissions: ${ok}`);
       return ok;
     },
-    scan: (onFound, ms, opts) => inner.scan(onFound, ms, opts),
+    scan: (onFound, ms) => inner.scan(onFound, ms),
     connect: async (id, ms) => {
       const t0 = Date.now();
       try {
@@ -163,19 +163,15 @@ function SpikeScreen(): React.JSX.Element {
     return reply;
   };
 
-  const scanWith = async (unfiltered: boolean): Promise<void> => {
+  const scan = async (): Promise<void> => {
     const t = getTransport();
     await t.requestPermissions();
     if ((await t.adapterState()) !== 'on') throw new Error('bluetooth not ready');
     setFound([]);
-    const handle = t.scan(
-      (d) => {
-        setFound((prev) => (prev.some((p) => p.id === d.id) ? prev : [...prev, d]));
-        log(`found ${d.id} ${d.name ?? '-'} rssi ${d.rssi ?? '?'}`);
-      },
-      SCAN_MS,
-      { unfiltered },
-    );
+    const handle = t.scan((d) => {
+      setFound((prev) => (prev.some((p) => p.id === d.id) ? prev : [...prev, d]));
+      log(`found ${d.id} ${d.name ?? '-'} rssi ${d.rssi ?? '?'}`);
+    }, SCAN_MS);
     await handle.done;
     log('scan finished');
   };
@@ -269,8 +265,7 @@ function SpikeScreen(): React.JSX.Element {
   };
 
   const actions: [string, () => Promise<void>][] = [
-    ['Scan', () => scanWith(false)],
-    ['Scan (no filter)', () => scanWith(true)],
+    ['Scan', scan],
     ['Connect', connect],
     ['Fetch status', fetchStatus],
     ['Set time', setTime],

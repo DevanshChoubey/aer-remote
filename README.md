@@ -87,8 +87,10 @@ Aer Remote talks to your dispenser over Bluetooth only.
 - **No network.** The code makes no network calls; ESLint bans `fetch` in every file.
 - **No `INTERNET` permission in release builds.** A config plugin removes it
   (`plugins/withReleaseNoInternet.js`). Debug builds keep it so they can reach Metro.
-- **No location.** The app never asks for location, and the location permissions are blocked in
-  `app.json`. Bluetooth scanning on Android uses `neverForLocation`.
+- **No location.** Release builds never ask for location: the location permissions are blocked in
+  `app.json`, and Bluetooth scanning on Android uses `neverForLocation`. Debug builds also run on
+  Android 11 for hardware testing, and only there ask for precise location, because Android 11 needs
+  it to scan.
 - **No account, analytics or telemetry.**
 - **Local data only.** Dispenser names, home time zones, the last status and the last schedules read
   stay on your phone.
@@ -100,7 +102,7 @@ See [SECURITY.md](SECURITY.md) for the scope and how to report a problem.
 | Item      | Supported                                                                     |
 | --------- | ----------------------------------------------------------------------------- |
 | Dispenser | Godrej aer Smart Matic (Bluetooth). Firmware variants are handled by a probe. |
-| Android   | Android 12 or newer (minSdk 31). Older versions will not install the app.     |
+| Android   | Android 12 or newer (minSdk 31). Debug builds also install on Android 11.     |
 | iOS       | A real iPhone with a development or release build. Expo Go is not supported.  |
 | Phones    | A real device. Simulators and emulators have no Bluetooth.                    |
 | Desktop   | Not yet. Planned for Phase 2.                                                 |
@@ -115,8 +117,9 @@ You need [Bun](https://bun.sh) and a real phone. Bluetooth does not work on simu
 ### Android (on Linux)
 
 You need Bun, the JDK (17), the Android SDK with `ANDROID_HOME` set, and an Android 12 or newer phone
-with USB debugging on, plugged in. Android 12 is the minimum (minSdk 31): older versions will not
-install the app.
+with USB debugging on, plugged in. Release builds need Android 12 (minSdk 31). Debug builds also
+install on Android 11; there the app asks for location, and Location must be on for scans to find the
+dispenser.
 
 ```sh
 git clone https://github.com/DevanshChoubey/aer-remote.git

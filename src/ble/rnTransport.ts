@@ -24,8 +24,8 @@ const ANDROID_MTU = 185;
 /** A monitor that fails right away (e.g. no CCCD) rejects subscribe(); later errors go to onError. */
 const SUBSCRIBE_SETTLE_MS = 250;
 const STATE_SETTLE_MS = 2000;
-/** Bluetooth permissions are runtime permissions from Android 12 (API 31). Older: unsupported. */
-const ANDROID_MIN_API = 31;
+/** Android 12 (API 31) added Bluetooth permissions that scan without location. */
+const BT_PERMISSIONS_API = 31;
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
@@ -59,23 +59,35 @@ function androidApi(): number {
   return typeof Platform.Version === 'number' ? Platform.Version : Number(Platform.Version);
 }
 
-const BT_PERMISSIONS = [
-  PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-  PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-] as const;
+type AndroidPermission =
+  (typeof PermissionsAndroid.PERMISSIONS)[keyof typeof PermissionsAndroid.PERMISSIONS];
+
+/**
+ * The runtime permissions Bluetooth needs on this Android version. Release builds require Android
+ * 12, so they only ever ask for Bluetooth. Debug builds also run on Android 11 for the hardware
+ * test, where scanning needs precise location (docs/ENGINEERING.md, privacy).
+ */
+export function androidPermissionsFor(api: number): AndroidPermission[] {
+  return api >= BT_PERMISSIONS_API
+    ? [
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      ]
+    : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+}
 
 /** Whether the Bluetooth permissions are already granted. Never prompts. */
 async function androidPermissionsGranted(): Promise<boolean> {
-  if (androidApi() < ANDROID_MIN_API) return false;
-  const results = await Promise.all(BT_PERMISSIONS.map((p) => PermissionsAndroid.check(p)));
+  const needed = androidPermissionsFor(androidApi());
+  const results = await Promise.all(needed.map((p) => PermissionsAndroid.check(p)));
   return results.every(Boolean);
 }
 
-/** Prompts for the Bluetooth permissions. Location is never requested (docs/ENGINEERING.md). */
+/** Prompts for the Bluetooth permissions. */
 async function androidRequestPermissions(): Promise<boolean> {
-  if (androidApi() < ANDROID_MIN_API) return false;
-  const result = await PermissionsAndroid.requestMultiple([...BT_PERMISSIONS]);
-  return BT_PERMISSIONS.every((p) => result[p] === 'granted');
+  const needed = androidPermissionsFor(androidApi());
+  const result = await PermissionsAndroid.requestMultiple(needed);
+  return needed.every((p) => result[p] === 'granted');
 }
 
 /** The adapter state once it has settled: Unknown and Resetting resolve shortly after start-up. */
@@ -116,7 +128,10 @@ export function wrapDevice(manager: BleManager, device: Device): BleConnection {
   return {
     deviceId: id,
     async characteristics(): Promise<BleCharacteristic[]> {
-      const list = await device.characteristicsForService(SERVICE_UUID);
+      const list = await device.characteristicsForService(SERVICE_UUID).catch((e: unknown) => {
+        // Scans list every device, so the user can pick one that is not a dispenser.
+        throw errorCodeOf(e) === BleErrorCode.ServiceNotFound ? new DeviceError('notDispenser') : e;
+      });
       return list.map((c) => ({
         uuid: c.uuid.toLowerCase(),
         // Writes are always without response, so only that property counts.
@@ -198,7 +213,7 @@ export function createRnTransport(
       return Platform.OS === 'android' ? androidRequestPermissions() : Promise.resolve(true);
     },
 
-    scan(onFound, timeoutMs, opts): { stop(): void; done: Promise<void> } {
+    scan(onFound, timeoutMs): { stop(): void; done: Promise<void> } {
       const m = mgr();
       let finish: () => void = () => undefined;
       let fail: (e: Error) => void = () => undefined;
@@ -214,29 +229,27 @@ export function createRnTransport(
         m.stopDeviceScan().then(finish, fail);
       };
       const timer = setTimeout(stop, timeoutMs);
-      m.startDeviceScan(
-        opts?.unfiltered ? null : [SERVICE_UUID],
-        { allowDuplicates: false },
-        async (error, device) => {
-          if (error) {
-            if (!stopped) {
-              stopped = true;
-              clearTimeout(timer);
-              m.stopDeviceScan().catch(() => undefined);
-              fail(scanError(error));
-            }
-            return;
+      // No native filter: a real Smart Matic does not advertise its service (hardware test,
+      // 2026-10-27). Every device is listed, and adding one checks for the service.
+      m.startDeviceScan(null, { allowDuplicates: false }, async (error, device) => {
+        if (error) {
+          if (!stopped) {
+            stopped = true;
+            clearTimeout(timer);
+            m.stopDeviceScan().catch(() => undefined);
+            fail(scanError(error));
           }
-          if (device && !stopped) {
-            const found: FoundDevice = {
-              id: device.id,
-              name: device.name ?? device.localName ?? null,
-              rssi: device.rssi,
-            };
-            onFound(found);
-          }
-        },
-      ).catch((e: unknown) => {
+          return;
+        }
+        if (device && !stopped) {
+          const found: FoundDevice = {
+            id: device.id,
+            name: device.name ?? device.localName ?? null,
+            rssi: device.rssi,
+          };
+          onFound(found);
+        }
+      }).catch((e: unknown) => {
         stopped = true;
         clearTimeout(timer);
         m.stopDeviceScan().catch(() => undefined);

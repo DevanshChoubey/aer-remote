@@ -326,7 +326,7 @@ export function createFakeTransport(
       void nextTick().then(() => {
         for (const id of registry.keys()) {
           if (stopped) break;
-          const found: FoundDevice = { id, name: 'aer', rssi: -60 };
+          const found: FoundDevice = { id, name: 'Smart Matic', rssi: -60 };
           onFound(found);
         }
         finish();

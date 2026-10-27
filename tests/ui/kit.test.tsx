@@ -33,6 +33,40 @@ describe('ui kit', () => {
     },
   );
 
+  it('Screen shows a round Back button beside the title only when given onBack', async () => {
+    const onBack = jest.fn();
+    const { rerender } = await render(
+      wrap(
+        <Screen title="Name">
+          <Txt>body</Txt>
+        </Screen>,
+      ),
+    );
+    expect(screen.queryByLabelText('Back')).toBeNull();
+    await rerender(
+      wrap(
+        <Screen title="Name" onBack={onBack}>
+          <Txt>body</Txt>
+        </Screen>,
+      ),
+    );
+    expect(screen.getByText('Name')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('Screen renders its footer outside the scrolling content', async () => {
+    await render(
+      wrap(
+        <Screen title="Name" scroll footer={<Txt>pinned</Txt>}>
+          <Txt>body</Txt>
+        </Screen>,
+      ),
+    );
+    expect(screen.getByText('pinned')).toBeTruthy();
+    expect(screen.getByText('body')).toBeTruthy();
+  });
+
   it('Button fires onPress and is blocked while loading', async () => {
     const onPress = jest.fn();
     const { rerender } = await render(wrap(<Button label="Spray now" onPress={onPress} />));

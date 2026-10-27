@@ -1,7 +1,28 @@
 import { BleErrorCode, State, type BleManager, type Device } from 'react-native-ble-plx';
 
-import { createRnTransport, mapState, settledState, wrapDevice } from '@/ble/rnTransport';
+import {
+  androidPermissionsFor,
+  createRnTransport,
+  mapState,
+  settledState,
+  wrapDevice,
+} from '@/ble/rnTransport';
 import { DeviceError } from '@/device/errors';
+
+describe('androidPermissionsFor', () => {
+  it('asks Android 12 and later for the Bluetooth permissions only', () => {
+    expect(androidPermissionsFor(31)).toEqual([
+      'android.permission.BLUETOOTH_SCAN',
+      'android.permission.BLUETOOTH_CONNECT',
+    ]);
+    expect(androidPermissionsFor(36)).not.toContain('android.permission.ACCESS_FINE_LOCATION');
+  });
+
+  // Only debug builds install on Android 11; scanning there needs precise location.
+  it('asks Android 11 for precise location', () => {
+    expect(androidPermissionsFor(30)).toEqual(['android.permission.ACCESS_FINE_LOCATION']);
+  });
+});
 
 describe('mapState', () => {
   it.each([
@@ -107,6 +128,49 @@ describe('wrapDevice subscribe', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+// A real Smart Matic does not advertise its service (hardware test, 2026-10-27), so the scan
+// cannot filter by it: it lists every device and adding one checks for the service.
+describe('createRnTransport scan', () => {
+  type ScanListener = (e: Error | null, d: Device | null) => void;
+  const advert = (id: string, name: string | null): Device =>
+    ({ id, name, localName: null, rssi: -50 }) as unknown as Device;
+
+  it('scans without a filter and reports every device', () => {
+    let listener: ScanListener = () => undefined;
+    let uuids: unknown = 'unset';
+    const manager = {
+      startDeviceScan: async (u: unknown, _o: unknown, l: ScanListener) => {
+        uuids = u;
+        listener = l;
+      },
+      stopDeviceScan: async () => undefined,
+    } as unknown as BleManager;
+    const found: (string | null)[] = [];
+    const handle = createRnTransport(() => manager).scan((d) => found.push(d.name), 10000);
+    listener(null, advert('aer', 'Smart Matic'));
+    listener(null, advert('tv', '[LG] webOS TV'));
+    listener(null, advert('tag', null));
+    handle.stop();
+    expect(uuids).toBeNull();
+    expect(found).toEqual(['Smart Matic', '[LG] webOS TV', null]);
+  });
+});
+
+describe('wrapDevice characteristics', () => {
+  it('reports a device without the aer service as notDispenser', async () => {
+    const device = {
+      id: 'tv',
+      characteristicsForService: () =>
+        Promise.reject(
+          Object.assign(new Error('no service'), { errorCode: BleErrorCode.ServiceNotFound }),
+        ),
+    } as unknown as Device;
+    const result = wrapDevice({} as BleManager, device).characteristics();
+    await expect(result).rejects.toBeInstanceOf(DeviceError);
+    await expect(result).rejects.toMatchObject({ code: 'notDispenser' });
   });
 });
 

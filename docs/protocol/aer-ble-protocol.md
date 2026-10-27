@@ -27,6 +27,10 @@ vendor code is copied.
 
 Service `6E400000-B5A3-F393-E0A9-E50E24DCCA9E` (Nordic-UART-style). No pairing or auth.
 
+**Advertising.** The dispenser advertises the name `Smart Matic` but not the service UUID, so a scan
+filtered by the service finds nothing. Aer Remote lists every device and checks for the service on connect. Seen on one dispenser (address prefix `A4:C1:38`) from an
+Android 11 phone on 2026-10-27.
+
 | UUID suffix | Vendor name                            | Use                                                        |
 | ----------- | -------------------------------------- | ---------------------------------------------------------- |
 | `…0001`     | RESPONSE_UUID                          | Notifications (replies). Has **no CCCD** on some firmware. |
