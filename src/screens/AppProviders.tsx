@@ -7,15 +7,18 @@ import { ThemeProvider, useThemePreference, type ThemePreference } from '@/theme
 
 const THEME_LOAD_TIMEOUT_MS = 1500;
 
-/** Holds the native splash screen up until the fonts are ready, then hides it. */
-function SplashGate({ children }: { children: ReactNode }): ReactElement {
+/**
+ * Holds the native splash screen and the app up until the fonts are ready. Android keeps the
+ * widths of text laid out in the fallback font, so rendering early clips labels once Nunito loads.
+ */
+function SplashGate({ children }: { children: ReactNode }): ReactElement | null {
   const { fontsReady } = useThemePreference();
   useEffect(() => {
     if (fontsReady) {
       SplashScreen.hideAsync().catch((e: unknown) => console.warn('Could not hide splash', e));
     }
   }, [fontsReady]);
-  return <>{children}</>;
+  return fontsReady ? <>{children}</> : null;
 }
 
 export function AppProviders(props: {

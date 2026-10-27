@@ -1,6 +1,7 @@
 import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
 import { Nunito_500Medium, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { useFonts } from 'expo-font';
+import { StatusBar } from 'expo-status-bar';
 import { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
@@ -42,14 +43,13 @@ export function ThemeProvider(props: ThemeProviderProps): ReactElement {
   const [preference, setPreferenceState] = useState<ThemePreference>(
     props.initialPreference ?? 'system',
   );
-  // Children render immediately; text uses the system font until the families below are loaded.
+  // Children render immediately; the app layout waits for fontsReady before showing them.
   const [fontsLoaded, fontError] = useFonts({ Fraunces_700Bold, Nunito_500Medium, Nunito_700Bold });
   const fontsReady = fontsLoaded || fontError !== null;
   const { onPreferenceChange } = props;
+  const scheme =
+    props.scheme ?? (preference === 'system' ? (system === 'dark' ? 'dark' : 'light') : preference);
   const value = useMemo<ThemeValue>(() => {
-    const scheme =
-      props.scheme ??
-      (preference === 'system' ? (system === 'dark' ? 'dark' : 'light') : preference);
     return {
       tokens: scheme === 'dark' ? darkTokens : lightTokens,
       preference,
@@ -59,8 +59,14 @@ export function ThemeProvider(props: ThemeProviderProps): ReactElement {
         onPreferenceChange?.(p);
       },
     };
-  }, [props.scheme, preference, system, onPreferenceChange, fontsReady]);
-  return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
+  }, [scheme, preference, onPreferenceChange, fontsReady]);
+  return (
+    <ThemeContext.Provider value={value}>
+      {/* Dark icons on the light theme, light icons on the dark one, whatever the system says. */}
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      {props.children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme(): Tokens {
