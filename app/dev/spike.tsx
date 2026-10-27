@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import { createRnTransport } from '@/ble/rnTransport';
 import type { BleConnection, BleTransport, FoundDevice } from '@/ble/transport';
+import { useServices } from '@/core';
 import { DispenserSession, openSession } from '@/device/session';
 import { zoneInfo } from '@/device/time';
 import {
@@ -117,6 +118,8 @@ function SpikeScreen(): React.JSX.Element {
   const [found, setFound] = useState<FoundDevice[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { alerts } = useServices();
+  const [pending, setPending] = useState<string[] | null>(null);
 
   useEffect(() => {
     // A remount rebuilds the logging wrapper so it logs to the new screen state.
@@ -264,6 +267,12 @@ function SpikeScreen(): React.JSX.Element {
     );
   };
 
+  const showPending = async (): Promise<void> => {
+    const keys = await alerts.pendingKeys();
+    setPending(keys);
+    log(`scheduled alerts: ${keys.length}`);
+  };
+
   const actions: [string, () => Promise<void>][] = [
     ['Scan', scan],
     ['Connect', connect],
@@ -277,6 +286,7 @@ function SpikeScreen(): React.JSX.Element {
     ['Remove schedules', removeSchedules],
     ['Blink', blink],
     ['Disconnect', disconnect],
+    ['List scheduled alerts', showPending],
     [`${REPEATS}x connect + status`, passBar],
   ];
 
@@ -308,6 +318,19 @@ function SpikeScreen(): React.JSX.Element {
         ))}
         <Button variant="ghost" label="Clear log" onPress={() => setLines([])} />
       </Row>
+      {pending ? (
+        <Box bg="surface" border="border" radius="sm" p={2}>
+          <Column>
+            <Txt variant="bodyBold">Scheduled alerts</Txt>
+            {pending.length === 0 ? <Txt variant="caption">none</Txt> : null}
+            {pending.map((k) => (
+              <Txt key={k} variant="caption" selectable>
+                {k}
+              </Txt>
+            ))}
+          </Column>
+        </Box>
+      ) : null}
       <Box bg="surface" border="border" radius="sm" p={2}>
         <Column>
           {lines.map((l, i) => (

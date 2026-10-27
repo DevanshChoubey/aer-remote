@@ -35,6 +35,8 @@ export function AppProviders(props: {
     });
     return () => sub.remove();
   }, [services]);
+  // Alerts follow the saved dispensers for as long as the app is up.
+  useEffect(() => services.alerts.start(), [services]);
   const [initial, setInitial] = useState<ThemePreference | null>(preferences ? null : 'system');
   useEffect(() => {
     if (!preferences) return;

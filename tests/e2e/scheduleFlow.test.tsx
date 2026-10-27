@@ -10,6 +10,7 @@ import { HomeScreen } from '@/screens/home/HomeScreen';
 import { ScheduleEditor } from '@/screens/schedule/ScheduleEditor';
 import { createMemoryStore } from '@/store/memoryStore';
 import { ThemeProvider } from '@/theme';
+import { fakeAlerts } from '../screens/alertsHarness';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -83,7 +84,7 @@ describe('add, schedule, spray, home', () => {
     const store = createMemoryStore();
     const client = new DispenserClient(fake, store, { scheduleGapMs: 0, connectAttempts: 1 });
     await render(
-      <ServicesProvider services={{ store, client }}>
+      <ServicesProvider services={{ store, client, alerts: fakeAlerts(store).alerts }}>
         <ThemeProvider scheme="light">
           <Host />
         </ThemeProvider>
