@@ -56,6 +56,7 @@
       ],
       "./plugins/withReleaseNoInternet",
       "./plugins/withReleaseMinSdk",
+      "./plugins/withReleaseSigning",
       [
         "expo-build-properties",
         {

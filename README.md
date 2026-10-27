@@ -116,6 +116,13 @@ the dispenser, before you use Aer Remote.
 
 You need [Bun](https://bun.sh) and a real phone. Bluetooth does not work on simulators or emulators.
 
+### Install the Android APK
+
+To skip building, download `aer-remote-<version>.apk` from the
+[latest release](https://github.com/DevanshChoubey/aer-remote/releases/latest) on an Android 12 or
+newer phone and open it. Android asks you to allow installs from your browser or file manager the
+first time. Later releases are signed with the same key, so they install over it.
+
 ### Android (on Linux)
 
 You need Bun, the JDK (17), the Android SDK with `ANDROID_HOME` set, and an Android 12 or newer phone
@@ -157,6 +164,12 @@ bunx expo run:ios --device --configuration Release
 ```
 
 A build signed with a free Apple ID expires after 7 days. Rebuild it then.
+
+An Android release build is signed with the debug key unless `AER_UPLOAD_STORE_FILE`,
+`AER_UPLOAD_STORE_PASSWORD`, `AER_UPLOAD_KEY_ALIAS` and `AER_UPLOAD_KEY_PASSWORD` are set, in the
+environment or as gradle properties (`plugins/withReleaseSigning.js`). The published APKs use the
+maintainer's upload key, so a build signed with another key must be uninstalled before it can
+replace one.
 
 ### Development
 
