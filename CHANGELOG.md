@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Privacy policy (`PRIVACY.md`) and the Google Play listing text (`docs/store/google-play.md`).
+
 ## [1.0.0] - 2026-10-27
 
 The first release. Passed the hardware test on one Android phone (10 of 10 connects within 5 s at
