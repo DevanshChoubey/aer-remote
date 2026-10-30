@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - New app icon and splash: a spray can with dotted mist, replacing the rounded dispenser.
+- Expo SDK 58 patch updates (expo 58.0.21, React Native 0.88.1 and nine other Expo packages), so
+  `expo-doctor` passes again.
 
 ## [1.0.0] - 2026-10-27
 
