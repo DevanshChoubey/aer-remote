@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.devanshchoubey.aerremote",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#fcf1de",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -97,7 +97,8 @@ Aer Remote talks to your dispenser over Bluetooth only.
 - **Local data only.** Dispenser names, home time zones, the last status and the last schedules read
   stay on your phone.
 
-See [SECURITY.md](SECURITY.md) for the scope and how to report a problem.
+The full [privacy policy](PRIVACY.md) is the one linked from the store listing. See
+[SECURITY.md](SECURITY.md) for the scope and how to report a problem.
 
 ## Compatibility
 
