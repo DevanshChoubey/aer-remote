@@ -16,6 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New app icon and splash: a spray can with dotted mist, replacing the rounded dispenser.
 - Expo SDK 58 patch updates (expo 58.0.21, React Native 0.88.1 and nine other Expo packages), so
   `expo-doctor` passes again.
+- When auto spray is on and schedules are set, the dispenser screen warns that a starting schedule
+  turns auto spray off.
+
+### Fixed
+
+- Turning auto spray on now checks the status the dispenser reads back instead of trusting its
+  acknowledgement. A battery below the cutoff, or a running schedule window, now shows an error
+  instead of a switch that says on while nothing sprays.
 
 ## [1.0.0] - 2026-10-27
 

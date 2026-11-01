@@ -166,6 +166,28 @@ describe('DispenserScreen', () => {
     await done(services);
   });
 
+  it('warns that a schedule will turn auto spray off when both are set', async () => {
+    const { fake, services } = await mount({ schedules: [weekdays] });
+    await screen.findByText('Battery 50%');
+    const hint =
+      'When a schedule starts, the dispenser turns auto spray off until you turn it on again.';
+    expect(screen.queryByText(hint)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Auto spray'));
+    await waitFor(() => expect(fake.state('a').autoSpray).toBe(20));
+    expect(await screen.findByText(hint)).toBeTruthy();
+    await done(services);
+  });
+
+  it('shows no schedule warning when there are no schedules', async () => {
+    const { fake, services } = await mount();
+    await screen.findByText('Battery 50%');
+    await fireEvent.press(screen.getByLabelText('Auto spray'));
+    await waitFor(() => expect(fake.state('a').autoSpray).toBe(20));
+    await screen.findByText('Every 20 minutes');
+    expect(screen.queryByText(/until you turn it on again/)).toBeNull();
+    await done(services);
+  });
+
   it('shows the unreachable copy and keeps the stored data when the dispenser is out of reach', async () => {
     const { services } = await mount({
       busy: true,

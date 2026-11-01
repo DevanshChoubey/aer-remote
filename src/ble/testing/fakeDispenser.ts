@@ -46,6 +46,13 @@ export interface FakeDispenserOptions {
   scheduleReadOnly?: boolean;
   /** Set-schedules messages are acknowledged but not applied. */
   ignoreScheduleWrites?: boolean;
+  /**
+   * A schedule window with this interval is running: status reports `cS` 12x, and auto-spray
+   * requests are acknowledged but not applied, as on firmware 3.0.8-IN.
+   */
+  scheduleWindow?: Interval;
+  /** Auto-spray requests are acknowledged but not applied. */
+  ignoreAutoSpray?: boolean;
 }
 
 export interface FakeDispenserState {
@@ -70,6 +77,7 @@ export type FakeTransport = BleTransport & {
 const REPLY_OFFSET = 50;
 const AUTO_SPRAY_CODE: Record<Interval, number> = { 10: 112, 20: 113, 40: 114 };
 const NO_AUTO_SPRAY_CODE = 111;
+const SCHEDULE_WINDOW_CODE: Record<Interval, number> = { 10: 121, 20: 122, 40: 123 };
 const DEFAULT_BATTERY_MV = 3000;
 const FIRMWARE = '1.0.0';
 
@@ -99,6 +107,11 @@ function bytesOf(v: CborValue | undefined): Uint8Array | null {
   return null;
 }
 
+function statusCode(state: FakeDispenserState, options: FakeDispenserOptions): number {
+  if (options.scheduleWindow) return SCHEDULE_WINDOW_CODE[options.scheduleWindow];
+  return state.autoSpray ? AUTO_SPRAY_CODE[state.autoSpray] : NO_AUTO_SPRAY_CODE;
+}
+
 /** Apply a decoded request to the device state; returns the extra reply fields. */
 function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
   const { state, options } = device;
@@ -125,7 +138,8 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
     }
     case MT.sprayNow: {
       state.spraysSinceRefill += 1;
-      if (isInterval(body.rI)) state.autoSpray = body.rI;
+      const autoAllowed = !options.scheduleWindow && !options.ignoreAutoSpray;
+      if (isInterval(body.rI) && autoAllowed) state.autoSpray = body.rI;
       return [];
     }
     case MT.refill:
@@ -140,7 +154,7 @@ function apply(device: Device, mT: number, body: CborMap): CborEntry[] | null {
           ? []
           : ([['bV', options.batteryMv ?? DEFAULT_BATTERY_MV]] as CborEntry[])),
         ['fV', FIRMWARE],
-        ['cS', state.autoSpray ? AUTO_SPRAY_CODE[state.autoSpray] : NO_AUTO_SPRAY_CODE],
+        ['cS', statusCode(state, options)],
         ['sC', state.spraysSinceRefill],
       ];
     case MT.removeSchedules:

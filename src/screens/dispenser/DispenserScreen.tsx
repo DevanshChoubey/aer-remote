@@ -124,6 +124,11 @@ export function DispenserScreen(): ReactElement {
                 ? t('dispenser.autoOffScheduleRunning')
                 : t('dispenser.autoOff')}
           </Txt>
+          {auto !== null && list !== undefined && list.length > 0 ? (
+            <Txt variant="caption" color="muted">
+              {t('dispenser.autoStopsForSchedule')}
+            </Txt>
+          ) : null}
           <Row gap={2} wrap>
             {INTERVALS.map((n) => (
               <Chip

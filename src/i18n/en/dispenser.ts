@@ -5,6 +5,8 @@ export default {
   autoEvery: 'Every {minutes} minutes',
   autoOff: 'Off',
   autoOffScheduleRunning: 'Off while a schedule runs',
+  autoStopsForSchedule:
+    'When a schedule starts, the dispenser turns auto spray off until you turn it on again.',
   status: 'Status',
   refill: 'Refill left',
   refillReset: 'I refilled it',

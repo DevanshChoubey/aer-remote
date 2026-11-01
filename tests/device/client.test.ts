@@ -206,6 +206,40 @@ describe('operations', () => {
     expect(mts(r)).toContain(106);
   });
 
+  it('setAutoSpray rejects with batteryTooLow on a low battery but still stores the status', async () => {
+    const r = rig({ batteryMv: 2300 });
+    await r.client.add(ID, 'Hall', TZ);
+    await expect(r.client.setAutoSpray(ID, 20)).rejects.toMatchObject({
+      code: 'rejected',
+      message: 'batteryTooLow',
+    });
+    expect((await r.store.get(ID))?.lastStatus?.batteryMv).toBe(2300);
+  });
+
+  it('setAutoSpray turns auto spray off on a low battery', async () => {
+    const r = rig({ batteryMv: 2300 });
+    await r.client.add(ID, 'Hall', TZ);
+    expect((await r.client.setAutoSpray(ID, null)).autoSpray).toBeNull();
+  });
+
+  it('setAutoSpray rejects with scheduleRunning when a schedule window keeps auto spray off', async () => {
+    const r = rig({ scheduleWindow: 20 });
+    await r.client.add(ID, 'Hall', TZ);
+    await expect(r.client.setAutoSpray(ID, 10)).rejects.toMatchObject({
+      code: 'rejected',
+      message: 'scheduleRunning',
+    });
+    const stored = (await r.store.get(ID))?.lastStatus;
+    expect(stored?.scheduleRunning).toBe(true);
+    expect(stored?.autoSpray).toBeNull();
+  });
+
+  it('setAutoSpray rejects when the dispenser acknowledges but reports another state', async () => {
+    const r = rig({ ignoreAutoSpray: true });
+    await r.client.add(ID, 'Hall', TZ);
+    expect(await codeOf(r.client.setAutoSpray(ID, 40))).toBe('rejected');
+  });
+
   it('resetRefill zeroes the counter', async () => {
     const r = rig();
     await r.client.add(ID, 'Hall', TZ);

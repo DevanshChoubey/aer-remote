@@ -155,7 +155,18 @@ export class DispenserClient {
       await s.send(
         interval === null ? stopAutoSprayMsg(s.nextMN()) : sprayNowMsg(s.nextMN(), interval),
       );
-      return this.finish(id, s);
+      const status = await this.finish(id, s);
+      if (interval === null) return status;
+      // The device acks below the cutoff without spraying, and during a schedule window it acks but
+      // keeps auto-spray off, so trust the status read back, not the ack.
+      if (isBatteryTooLow(status.batteryMv)) throw new DeviceError('rejected', 'batteryTooLow');
+      if (status.autoSpray !== interval) {
+        throw new DeviceError(
+          'rejected',
+          status.scheduleRunning ? 'scheduleRunning' : 'auto spray not on',
+        );
+      }
+      return status;
     });
   }
 
