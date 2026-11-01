@@ -8,6 +8,8 @@ export default {
   rejected:
     'The dispenser refused that request. It may be busy or have its own limits. Wait a moment, then try again.',
   batteryTooLow: 'Battery too low to spray. Replace the batteries.',
+  autoSprayScheduleRunning:
+    'A schedule is running, so the dispenser kept auto spray off. Try again after it ends.',
   disconnected: 'The connection to the dispenser was lost. Try again.',
   timeZone: "This dispenser's time zone isn't valid. Pick it again in Settings.",
   notDispenser: "That device isn't a Smart Matic. Pick another one from the list.",

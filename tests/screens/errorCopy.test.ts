@@ -25,6 +25,15 @@ describe('errorCopyKey', () => {
     expect(t('errors.batteryTooLow')).toBe('Battery too low to spray. Replace the batteries.');
   });
 
+  it('maps a schedule window rejection to the schedule copy', () => {
+    expect(errorCopyKey(new DeviceError('rejected', 'scheduleRunning'))).toBe(
+      'errors.autoSprayScheduleRunning',
+    );
+    expect(t('errors.autoSprayScheduleRunning')).toBe(
+      'A schedule is running, so the dispenser kept auto spray off. Try again after it ends.',
+    );
+  });
+
   it('keeps other rejections on their own copy', () => {
     expect(errorCopyKey(new DeviceError('rejected', 'invalid schedules'))).toBe('errors.rejected');
   });

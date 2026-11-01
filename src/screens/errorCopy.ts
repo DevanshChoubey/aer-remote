@@ -4,6 +4,9 @@ import { DeviceError } from '@/core';
 export function errorCopyKey(e: unknown): string {
   if (e instanceof DeviceError) {
     if (e.code === 'rejected' && e.message === 'batteryTooLow') return 'errors.batteryTooLow';
+    if (e.code === 'rejected' && e.message === 'scheduleRunning') {
+      return 'errors.autoSprayScheduleRunning';
+    }
     return `errors.${e.code}`;
   }
   return 'errors.generic';
